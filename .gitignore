@@ -1,0 +1,6 @@
+a.out
+*.o
+*.bin
+core
+test*.c
+*.swp
