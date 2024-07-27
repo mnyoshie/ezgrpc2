@@ -1,20 +1,23 @@
-/* thpool.h - thread pool */
+/* pthpool.h - pollable thread pool */
 #ifndef MNTHPOOL_H
 #define MNTHPOOL_H
+#include <time.h>
 #include "list.h"
 
 typedef struct task_t task_t;
 struct task_t {
+  char is_timeout;
+  time_t timeout;
   void (*ret_cleanup)(void*), (*userdata_cleanup)(void*);
   void *(*func)(void *);
   void *userdata, *ret;
 };
 
-typedef struct thpool_t thpool_t;
-struct thpool_t;
+typedef struct pthpool_t pthpool_t;
+struct pthpool_t;
 
 /**
- * .. c:function:: thpool_t *thpool_init(int workers, int flags)
+ * .. c:function:: pthpool_t *pthpool_init(int workers, int flags)
  *
  *    Initializes the thread pool.
  *
@@ -29,12 +32,12 @@ struct thpool_t;
  *
  *    .. code-block:: C
  *
- *      thpool_t *pool = thpool_init(4, -1, -1);
+ *      pthpool_t *pool = pthpool_init(4, -1);
  */
-thpool_t *thpool_init(int workers, int flags);
+pthpool_t *pthpool_init(int workers, int flags);
 
 /**
- * .. c:function:: int thpool_add_task(thpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*))
+ * .. c:function:: int pthpool_add_task(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*))
  *
  *    Adds task to the thread pool.
  *
@@ -48,23 +51,23 @@ thpool_t *thpool_init(int workers, int flags);
  *                     .. warning::
  *                       User must exercise caution in sharing the same ``userdata`` to two
  *                       or more tasks and should set param ``userdata_cleanup`` to ``NULL`` to prevent
- *                       a possible double free when :c:func:`thpool_destroy` is called.
+ *                       a possible double free when :c:func:`pthpool_destroy` is called.
  *    :param ret_cleanup: Cleanup handler for the value returned by ``func``
  *                        when the task is not popped out of pool via a call to
- *                        :c:func:`thpool_poll()`.
+ *                        :c:func:`pthpool_poll()`.
  *
- *                        This is called when the pool is stopped via :c:func:`thpool_destroy`
- *                        and there's executed tasks not popped via :c:func:`thpool_poll`.
+ *                        This is called when the pool is stopped via :c:func:`pthpool_destroy`
+ *                        and there's executed tasks not popped via :c:func:`pthpool_poll`.
  *
  *                        If ``NULL``, no cleanup is performed.
  *    :param userdata_cleanup: Cleanup handler for the parameter ``userdata`` when the task is
- *                            not popped out of pool via a call to :c:func:`thpool_poll()`.
+ *                            not popped out of pool via a call to :c:func:`pthpool_poll()`.
  *
- *                            This is called when the pool is stopped via :c:func:`thpool_destroy`
+ *                            This is called when the pool is stopped via :c:func:`pthpool_destroy`
  *                            and there's tasks left in the queue unexecuted.
  *
  *                            If ``NULL``, no cleanup is performed.
- *    :returns: The :c:func:`thpool_add_task` function returns an integer indicating the result
+ *    :returns: The :c:func:`pthpool_add_task` function returns an integer indicating the result
  *              of the operation as follows:
  *
  *              * 0, if the addition of the task is successfull.
@@ -81,8 +84,8 @@ thpool_t *thpool_init(int workers, int flags);
  *       void *callback(void *data){return  NULL};
  *
  *       int main() {
- *         thpool_t *pool = thpool_init(4, -1, -1);
- *         thpool_add_task(pool, callback, NULL, NULL, NULL);
+ *         pthpool_t *pool = pthpool_init(4, -1, -1);
+ *         pthpool_add_task(pool, callback, NULL, NULL, NULL);
  *       }
  *
  *
@@ -92,7 +95,7 @@ thpool_t *thpool_init(int workers, int flags);
  
  *       #include <stdlib.h>
  *       #include <unistd.h>
- *       #include "thpool.h"
+ *       #include "pthpool.h"
  *       void ret_cleanup(void *p) {
  *         puts("called ret_cleanup");
  *         free(p);
@@ -104,11 +107,11 @@ thpool_t *thpool_init(int workers, int flags);
  *       void *callback(void *data){return  malloc(32);};
  *
  *       int main() {
- *         thpool_t *pool = thpool_init(4, -1, -1);
+ *         pthpool_t *pool = pthpool_init(4, -1,);
  *         for (int  i = 0; i < 5; i++)
- *           thpool_add_task(pool, callback, malloc(i), ret_cleanup, userdata_cleanup);
+ *           pthpool_add_task(pool, callback, malloc(i), ret_cleanup, userdata_cleanup);
  *         sleep(1);
- *         thpool_destroy(pool);
+ *         pthpool_destroy(pool);
  *       }
  *
  *    Result 2: :: 
@@ -125,10 +128,12 @@ thpool_t *thpool_init(int workers, int flags);
  *       called ret_cleanup
  *     
  */
-int thpool_add_task(thpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*));
+int pthpool_add_task(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*));
+
+int pthpool_add_task2(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout);
 
 /**
- * .. c:function:: void thpool_destroy(thpool_t *pool)
+ * .. c:function:: void pthpool_destroy(pthpool_t *pool)
  *
  *    Destroys the thread pool.
  *
@@ -137,16 +142,16 @@ int thpool_add_task(thpool_t *pool, void *(*func)(void*), void *userdata, void (
  *    If there's left unexecuted tasks in the pool, it is popped and the 
  *    registered ``userdata_cleanup``, if setted, is called.
  *
- *    If there's left executed tasks in pool, not popped via, :c:func:thpool_poll,
+ *    If there's left executed tasks in pool, not popped via, :c:func:pthpool_poll,
  *    it is popped, and the registered,  ``userdata_cleanup`` and ``ret_cleanup``,
  *    if setted, is called with the argument ``userdata`` and ``ret``, respectively.
  *
  */
-void thpool_destroy(thpool_t *pool);
+void pthpool_destroy(pthpool_t *pool);
 
 
 /**
- * .. c:function:: list_t *thpool_poll(thpool_t *pool, list_t *list)
+ * .. c:function:: list_t *pthpool_poll(pthpool_t *pool, list_t *list)
  *
  *    Polls for finished tasks in the thread pool.
  *
@@ -158,7 +163,7 @@ void thpool_destroy(thpool_t *pool);
  *    :c:func:`list_pop` until it returns NULL.
  *
  *    The address returned by :c:func:`list_pop`, for ``list`` filled
- *    by :c:func:`thpool_poll` is of address which can be safely casted to
+ *    by :c:func:`pthpool_poll` is of address which can be safely casted to
  *    :c:struct:`task_t *`. This `task_t *` must be freed with
  *    :c:func:`free`.
  *
@@ -168,25 +173,25 @@ void thpool_destroy(thpool_t *pool);
  *
  *       #include <stdio.h>
  *       #include <stdlib.h>
- *       #include "thpool.h"
+ *       #include "pthpool.h"
  *
  *       void *callback(void *data){return (char *)data + 1};
  *
  *       int main() {
- *         thpool_t *pool = thpool_init(4, -1, -1);
- *         thpool_add_task(pool, callback, (void*)0x32, NULL, NULL);
- *         thpool_add_task(pool, callback, (void*)0x192, NULL, NULL);
+ *         pthpool_t *pool = pthpool_init(4, -1, -1);
+ *         pthpool_add_task(pool, callback, (void*)0x32, NULL, NULL);
+ *         pthpool_add_task(pool, callback, (void*)0x192, NULL, NULL);
  *         // wait for the tasks to get executed
  *         sleep(2);
  *         list_t l;
- *         thpool_poll(pool, &l);
+ *         pthpool_poll(pool, &l);
  *         task_t *t;
  *         while ((t = list_pop(&l)) != NULL) {
  *           printf("userdata = %p\n", t->userdata);
  *           printf("ret = %p\n", t->ret);
  *           free(t);
  *         }
- *         thpool_destroy(pool);
+ *         pthpool_destroy(pool);
  *       }
  *
  *    Result 1: :: 
@@ -198,6 +203,6 @@ void thpool_destroy(thpool_t *pool);
  *
  *
  */
-void thpool_poll(thpool_t *pool, list_t *list_tasks);
+void pthpool_poll(pthpool_t *pool, list_t *list_tasks);
 
 #endif

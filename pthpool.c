@@ -1,8 +1,8 @@
-/* pthpool.c - A pollable thread pool */
+/* ppthpool.c - A pollable thread pool */
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include "thpool.h"
+#include "pthpool.h"
 
 #define force_assert(s)                                                        \
   do {                                                                         \
@@ -12,7 +12,7 @@
       abort();                                                                 \
     }                                                                          \
   } while (0)
-struct thpool_t {
+struct pthpool_t {
   size_t max_queue, max_finished;
 
 #ifdef NO_COUNT
@@ -28,15 +28,14 @@ struct thpool_t {
 
   pthread_mutex_t mutex;
   pthread_cond_t wcond;
-  pthread_cond_t fcond;
   volatile int running;
   char stop;
 };
 
 
 
-static void *thpool_worker(void *arg) {
-  thpool_t *pool = arg;
+static void *pthpool_worker(void *arg) {
+  pthpool_t *pool = arg;
 
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->running++;
@@ -55,7 +54,10 @@ static void *thpool_worker(void *arg) {
 
     force_assert(!pthread_mutex_unlock(&pool->mutex));
     if (task != NULL) {
-      task->ret = task->func(task->userdata);
+      if (task->timeout && time(NULL) > task->timeout)
+        task->is_timeout = 1;
+      else 
+        task->ret = task->func(task->userdata);
 
       force_assert(!pthread_mutex_lock(&pool->mutex));
 #ifdef NO_COUNT
@@ -72,11 +74,10 @@ static void *thpool_worker(void *arg) {
   return NULL;
 }
 
-thpool_t *thpool_init(int workers, int flags) {
-  thpool_t *pool = malloc(sizeof(*pool));
+pthpool_t *pthpool_init(int workers, int flags) {
+  pthpool_t *pool = malloc(sizeof(*pool));
   pthread_mutex_init(&pool->mutex, NULL);
   pthread_cond_init(&pool->wcond, NULL);
-  pthread_cond_init(&pool->fcond, NULL);
 
   list_init(&pool->queue);
   list_init(&pool->finished);
@@ -90,14 +91,18 @@ thpool_t *thpool_init(int workers, int flags) {
 
   pthread_t *threads = malloc(sizeof(*threads)*workers);
   for (int i = 0; i < workers; i++)
-    pthread_create(threads + i, NULL, thpool_worker, pool);
+    pthread_create(threads + i, NULL, pthpool_worker, pool);
   pool->threads = threads;
 
   while (pool->running != workers);
   return pool;
 }
 
-int thpool_add_task(thpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*)) {
+int pthpool_add_task(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*)) {
+  return pthpool_add_task2(pool, func, userdata, ret_cleanup, userdata_cleanup, 0);
+}
+
+int pthpool_add_task2(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout) {
   static size_t max_queue = 0;
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int c = 0;
@@ -114,6 +119,8 @@ int thpool_add_task(thpool_t *pool, void *(*func)(void*), void *userdata, void (
     c = 1;
     goto unlock;
   }
+  task->is_timeout = 0;
+  task->timeout = timeout;
   task->func = func;
   task->userdata = userdata;
   task->ret = NULL;
@@ -143,7 +150,7 @@ unlock:
 /* checks if there's any finished tasks in the pool.
  * returns immediately
  */
-void thpool_poll(thpool_t *pool, list_t *l) {
+void pthpool_poll(pthpool_t *pool, list_t *l) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
 
   *l = pool->finished;
@@ -153,7 +160,7 @@ void thpool_poll(thpool_t *pool, list_t *l) {
   force_assert(!pthread_mutex_unlock(&pool->mutex));
 }
 
-void thpool_destroy(thpool_t *pool) {
+void pthpool_destroy(pthpool_t *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
@@ -184,12 +191,12 @@ static void *task(void *data) {
 
 int main0() {
 #if 1
-  thpool_t *thpool = thpool_init(4, -1);
+  pthpool_t *pthpool = pthpool_init(4, -1);
 
   list_t finished;
   for (int i = 0; 1; i++) {
-    thpool_add_task(thpool, task, malloc(32), free, free);
-    thpool_poll(thpool, &finished);
+    pthpool_add_task(pthpool, task, malloc(32), free, free);
+    pthpool_poll(pthpool, &finished);
     //printf("polled %zu\n", c);
     task_t *r;
     while ((r = list_pop(&finished)) != NULL) {
@@ -199,7 +206,7 @@ int main0() {
     }
   }
 
-  thpool_destroy(thpool);
+  pthpool_destroy(pthpool);
 #else
   list_t l;
   list_init(&l);

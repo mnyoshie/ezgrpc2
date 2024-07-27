@@ -1,93 +1,91 @@
-/* The author disclaims copyright to this source code and releases
- * it into the public domain;
- */
-#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <assert.h>
+
 #include "ezgrpc2.h"
+#include "pthpool.h"
 
-
-int volatile is_running = 1;
-enum ezgrpc_event_type_t {
-  EZGRPC2_EVENT_STREAM_MESSAGE,
-  EZGRPC2_EVENT_STREAM_CANCEL,
-};
-
-struct ezgrpc2_message_t {
-  char is_compressed;
-  uint32_t len;
-  char *data;
-};
-
-typedef struct ezgrpc2_event_message_t ezgrpc2_event_message_t;
-struct ezgrpc2_event_message_t {
-  void *stream_ctx;
-  void *userdata;
-  size_t nb_messages;
-  ezgrpc2_message *messages;
-};
-
-typedef struct ezgrpc2_event_cancel_t ezgrpc2_event_cancel_t;
-struct ezgrpc2_event_cancel_t {
-  void *stream_ctx;
-};
-
-struct ezgrpc2_event_t {
-  char *ip;
-  ezgrpc_event_type_t event;
-  union {
-    ezgrpc2_event_message_t message;
-    ezgrpc2_event_cancel_t cancel;
-  };
-};
-
-struct userdata_t {
-  void *(*callback)(void *);
-};
-
-void *callback(void *userdata) {
-  void *r = strdup("Hello from callback!\n");
-  return r;
+void ret_cleanup(void *p) {
+  puts("called ret_cleanup");
+  free(p);
 }
-int main(){
+void usrdata_cleanup(void *p) {
+  puts("called usrdata_cleanup");
+  free(p);
+}
+void *callback(void *data){return NULL;}
 
-  ezgrpc2_server_t *server = ezgrpc2_server_init("127.0.0.1", 8080, NULL, -1, 0);
-  thpool_t *pool = ezgrpc2_workers_init(4);
 
-  ezgrpc2_server_add_path(server, "/whatever.PublicAPI/DoSomething1", 0, NULL); 
-  ezgrpc2_server_add_path(server, "/whatever.PublicAPI/DoSomething2", 1, NULL); 
-
-  assert(server != NULL);
-  ezgrpc2_event_t *events;
-
-  while (is_running) {
-    int ready;
-    ready = ezgrpc2_server_poll(server, &events, 400);
-    if (ready < 0) {
-      fprintf(stderr, "ezgrpc2_poll failed %d\n", ready);
-      break;
+int main() {
+#if 0
+  thpool_t *pool = thpool_init(4, -1);
+  while (1) {
+    thpool_add_task(pool, callback, NULL, NULL, NULL);
+    printf("task\n");
+    list_t *l = thpool_poll(pool);
+    task_t *t;
+    while ((t = list_pop(l)) != NULL) {
+      printf("popped\n");
+      free(t);
     }
-    for (int e = 0; e < ready; e++) {
-      switch(events[e].event) {
-        case EZGRPC2_EVENT_CLIENT_CONNECT:
-        case EZGRPC2_EVENT_CLIENT_DCONNECT:
-          continue;
-        case EZGRPC2_EVENT_MESSAGE:
-          if (ezgrpc2_workers_add_work(workers,((userdata_t*) events[e].message.userdata)->callback, NULL) < 0)
-            abort();
-      }
-      ezgrpc2_event_free(events, ready);
-    }
-    int *wid;
-    if ((ready = ezgrpc2_workers_poll(thpo)) > 0) {
-      for (int i = 0; i < ready; i++)
-        void *ret = ezgrpc2_workers_remove_work(workers, wid[i]);
-    }
-    
-    if (r == 0)
-      continue;
-
+    free(l);
   }
-  ezgrpc2_workers_cleanup(workers);
-  ezgrpc2_server_cleanup(server);
-  return 0;
+  thpool_destroy(pool);
+#endif
+  //ezgrpc2_server_t *server = ezgrpc2_server_init("127.0.0.1", 19009, NULL, -1, 16);
+  ezgrpc2_server_t *server = ezgrpc2_server_init(NULL, -1, "::", 19009, 16);
 
+  ezgrpc2_path_t paths[2] = {0};
+  paths[0].path = "/test.yourAPI/whatever_service1";
+  paths[1].path = "/test.yourAPI/someservice";
+  list_init(&paths[0].list_events);
+  list_init(&paths[1].list_events);
+  int res;
+
+  while (1) {
+    res = ezgrpc2_server_poll(server, paths, 1, 10000);
+    if (res > 0) {
+      ezgrpc2_event_t *event;
+      while ((event = list_pop(&paths[0].list_events)) != NULL) {
+        switch(event->type) {
+          case EZGRPC2_EVENT_MESSAGE:
+            printf("event message %zu end stream %d\n", list_count(&event->message.list_messages), event->message.end_stream);
+            //list_t list_messages = event->message.list_messages;
+            list_init(&event->message.list_messages);
+            list_t list_messages;
+            list_init(&list_messages);
+           
+            for (int i = 0; i < 5; i++) {
+              ezgrpc2_message_t *msg = malloc(sizeof(*msg));
+              msg->is_compressed = 0;
+              msg->data = malloc(32 + i);
+              strcpy(msg->data, "Hello world!!");
+              msg->len = 32 + i;
+              list_add(&list_messages, msg);
+            }
+            ezgrpc2_session_send(event->ezsession, event->message.stream_id, &list_messages);
+            if (event->message.end_stream)
+              ezgrpc2_session_end_stream(event->ezsession, event->message.stream_id, 0);
+            break;
+          case EZGRPC2_EVENT_DATALOSS:
+            printf("event dataloss\n");
+            break;
+          case EZGRPC2_EVENT_CANCEL:
+            printf("event message\n");
+            break;
+        }
+        free(event);
+      }
+
+
+
+      continue;
+    }
+    else if (res == 0)
+      printf("no event\n");
+    else if (res < 0)
+      printf("here error\n");
+  }
+  assert(server != NULL);
+  ezgrpc2_server_destroy(server);
 }
