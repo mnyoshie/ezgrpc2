@@ -1,7 +1,10 @@
 LDFLAGS += -lnghttp2
 LDFLAGS += -lpthread
+LDFLAGS += -lcrypto
+LDFLAGS += -fsanitize=address
 
-CFLAGS += -I.
+
+CFLAGS += -I. -ggdb3 -fsanitize=address
 
 targets += examples/hello_world.bin
 

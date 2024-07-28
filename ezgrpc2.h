@@ -93,7 +93,8 @@ struct ezgrpc2_event_dataloss_t {
 
 typedef struct ezgrpc2_event_t ezgrpc2_event_t;
 struct ezgrpc2_event_t {
-  ezgrpc2_session_t *ezsession;
+  uint8_t session_id[32]; 
+ // ezgrpc2_session_t *ezsession;
   ezgrpc2_event_type_t type;
 
   union {
@@ -150,8 +151,8 @@ void ezgrpc2_server_destroy(ezgrpc2_server_t *server);
 //int ezgrpc2_session_submit_response(ezgrpc2_session_t *ezsession, i32 stream_id, list_t *list_messages, int end_stream, int grpc_status);
 
 
-int ezgrpc2_session_send(ezgrpc2_session_t *ezsession, i32 stream_id, list_t *list_messages);
-int ezgrpc2_session_end_stream(ezgrpc2_session_t *ezsession, i32 stream_id, int status);
+int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, list_t *list_messages);
+int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, int status);
 
 #ifdef __cplusplus
 }
