@@ -29,6 +29,7 @@ struct pthpool_t {
   pthread_mutex_t mutex;
   pthread_cond_t wcond;
   volatile int running;
+  volatile int live;
   char stop;
 };
 
@@ -38,7 +39,7 @@ static void *pthpool_worker(void *arg) {
   pthpool_t *pool = arg;
 
   force_assert(!pthread_mutex_lock(&pool->mutex));
-  pool->running++;
+  pool->live++;
   force_assert(!pthread_mutex_unlock(&pool->mutex));
 
   while (1) {
@@ -51,6 +52,9 @@ static void *pthpool_worker(void *arg) {
         list_add(&pool->queue, task);
       break;
     }
+
+    if (task != NULL)
+      pool->running++;
 
     force_assert(!pthread_mutex_unlock(&pool->mutex));
     if (task != NULL) {
@@ -65,10 +69,11 @@ static void *pthpool_worker(void *arg) {
       pool->nb_finished++;
 #endif
       list_add(&pool->finished, task);
+      pool->running--;
       force_assert(!pthread_mutex_unlock(&pool->mutex));
     }
   }
-  pool->running--;
+  pool->live--;
 
   force_assert(!pthread_mutex_unlock(&pool->mutex));
   return NULL;
@@ -86,6 +91,7 @@ pthpool_t *pthpool_init(int workers, int flags) {
   pool->nb_queue = 0;
 #endif
   pool->running = 0;
+  pool->live = 0;
   pool->nb_threads = workers;
   pool->stop = 0;
 
@@ -94,8 +100,18 @@ pthpool_t *pthpool_init(int workers, int flags) {
     pthread_create(threads + i, NULL, pthpool_worker, pool);
   pool->threads = threads;
 
-  while (pool->running != workers);
+  while (pool->live != workers);
   return pool;
+}
+
+int pthpool_is_empty(pthpool_t *pool) {
+  force_assert(!pthread_mutex_lock(&pool->mutex));
+  int ret = pool->running == 0 &&
+    list_peek(&pool->finished) == NULL &&
+    list_peek(&pool->queue) == NULL;
+
+  force_assert(!pthread_mutex_unlock(&pool->mutex));
+  return ret;
 }
 
 int pthpool_add_task(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*)) {
@@ -103,11 +119,11 @@ int pthpool_add_task(pthpool_t *pool, void *(*func)(void*), void *userdata, void
 }
 
 int pthpool_add_task2(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout) {
-  static size_t max_queue = 0;
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int c = 0;
 
 #ifdef NO_COUNT
+  static size_t max_queue = 0;
   if (pool->nb_queue > SIZE_MAX - 1) {
     c = 2;
     goto unlock;
@@ -184,13 +200,13 @@ void pthpool_destroy(pthpool_t *pool) {
   free(pool);
 }
 
+#if 0
 static void *task(void *data) {
   printf("hello task %p\n",(int) data);
   return malloc(42);
 }
 
 int main0() {
-#if 1
   pthpool_t *pthpool = pthpool_init(4, -1);
 
   list_t finished;
@@ -207,7 +223,6 @@ int main0() {
   }
 
   pthpool_destroy(pthpool);
-#else
   list_t l;
   list_init(&l);
   list_add(&l, (void*)0x123);
@@ -226,8 +241,8 @@ int main0() {
   list_add(&l, (void*)0x325);
 
   list_print(&l);
-#endif
 
   return 0;
 }
+#endif
 

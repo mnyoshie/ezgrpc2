@@ -55,7 +55,6 @@ void *callback(void *data){
     list_add(&usrdata->list_omessages, msg);
   }
   printf("task executed!!\n");
-  sleep(5);
   return data;
 }
 
@@ -86,7 +85,10 @@ int main() {
   int res;
 
   while (1) {
-    res = ezgrpc2_server_poll(server, paths, 1, 5);
+    /* if thread pool is empty, maybe we can give our resources to the cpu.
+     * and wait a little longer.
+     */
+    res = ezgrpc2_server_poll(server, paths, 2, pthpool_is_empty(pool) ? 10000 : 5);
     if (res > 0) {
       ezgrpc2_event_t *event;
       while ((event = list_pop(&paths[0].list_events)) != NULL) {
@@ -116,15 +118,32 @@ int main() {
       printf("here error\n");
       assert(0);
     }
+    else if (res == 0) {
+      printf("no event\n");
+    }
     //printf("heredjndjd\n");
     list_t list_tasks;
     pthpool_poll(pool, &list_tasks);
     task_t *task;
     while ((task = list_pop(&list_tasks)) != NULL) {
       struct userdata_t *data = task->ret;
-      ezgrpc2_session_send(server, data->session_id, data->stream_id, &data->list_omessages);
-      if (data->end_stream)
-        ezgrpc2_session_end_stream(server, data->session_id, data->stream_id, 0);
+      switch (ezgrpc2_session_send(server, data->session_id, data->stream_id, &data->list_omessages)){
+        case 0:
+         /* ok */
+          if (data->end_stream)
+            ezgrpc2_session_end_stream(server, data->session_id, data->stream_id, EZGRPC2_STATUS_OK);
+          break;
+        case 1:
+          /* possibly the client closed the connection */
+          printf("session id doesn't exists\n");
+          break;
+        case 2:
+          /* possibly the client sent a rst stream */
+          printf("stream id doesn't exists\n");
+          break;
+        default:
+          assert(0);
+      }
       free(task->ret);
       free(task);
     }

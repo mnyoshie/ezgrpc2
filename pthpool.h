@@ -205,4 +205,7 @@ void pthpool_destroy(pthpool_t *pool);
  */
 void pthpool_poll(pthpool_t *pool, list_t *list_tasks);
 
+
+int pthpool_is_empty(pthpool_t *pool);
+
 #endif

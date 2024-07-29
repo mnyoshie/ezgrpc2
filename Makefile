@@ -1,10 +1,17 @@
 LDFLAGS += -lnghttp2
 LDFLAGS += -lpthread
 LDFLAGS += -lcrypto
+
+ifeq ($(OS),Windows_NT)
+	LDFLAGS += -lWs2_32
+endif
+
 LDFLAGS += -fsanitize=address
 
 
 CFLAGS += -I. -ggdb3 -fsanitize=address
+CFLAGS += -Wall
+#CFLAGS += -Wextra
 
 targets += examples/hello_world.bin
 
