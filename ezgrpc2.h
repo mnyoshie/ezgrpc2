@@ -55,8 +55,13 @@ enum ezgrpc_status_code_t {
 typedef enum ezgrpc_status_code_t ezgrpc_status_code_t;
 
 enum ezgrpc2_event_type_t {
+  /* The client has sent a message/s */
   EZGRPC2_EVENT_MESSAGE,
+  /* The client has submitted an RST frame */
   EZGRPC2_EVENT_CANCEL,
+  /* The client has sent a malformed grpc message with
+   * an end stream
+   */
   EZGRPC2_EVENT_DATALOSS,
 };
 typedef enum ezgrpc2_event_type_t ezgrpc2_event_type_t;
@@ -80,13 +85,13 @@ typedef struct ezgrpc2_event_message_t ezgrpc2_event_message_t;
 struct ezgrpc2_event_message_t {
   char end_stream;
   i32 stream_id;
-  /* cast list_pop to ``ezgrpc2_message_t *`` */
+  /* cast list_popb to ``ezgrpc2_message_t *`` */
   list_t list_messages;
 };
 
 typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;
 struct ezgrpc2_event_dataloss_t {
-  /* cast list_pop to ``ezgrpc2_message_t *`` */
+  /* cast list_popb to ``ezgrpc2_message_t *`` */
   list_t list_messages;
   i32 stream_id;
 };
@@ -109,7 +114,8 @@ struct ezgrpc2_path_t {
   char *path;
   void *userdata;
 
-  /* cast list_pop to ``ezgrpc2_event_t *`` */
+  /* cast list_popb to ``ezgrpc2_event_t *`` */
+  /* Thus contains events for this specific path */
   list_t list_events;
 };
 
@@ -153,6 +159,8 @@ void ezgrpc2_server_destroy(ezgrpc2_server_t *server);
 
 int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, list_t *list_messages);
 int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, int status);
+
+int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 last_stream_id, int error_code);
 
 #ifdef __cplusplus
 }

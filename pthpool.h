@@ -160,9 +160,9 @@ void pthpool_destroy(pthpool_t *pool);
  *    :returns: The list of finished tasks.
  *
  *    The filled ``list`` is freed by repeatedly popping it with
- *    :c:func:`list_pop` until it returns NULL.
+ *    :c:func:`list_popb` until it returns NULL.
  *
- *    The address returned by :c:func:`list_pop`, for ``list`` filled
+ *    The address returned by :c:func:`list_popb`, for ``list`` filled
  *    by :c:func:`pthpool_poll` is of address which can be safely casted to
  *    :c:struct:`task_t *`. This `task_t *` must be freed with
  *    :c:func:`free`.
@@ -186,7 +186,7 @@ void pthpool_destroy(pthpool_t *pool);
  *         list_t l;
  *         pthpool_poll(pool, &l);
  *         task_t *t;
- *         while ((t = list_pop(&l)) != NULL) {
+ *         while ((t = list_popb(&l)) != NULL) {
  *           printf("userdata = %p\n", t->userdata);
  *           printf("ret = %p\n", t->ret);
  *           free(t);

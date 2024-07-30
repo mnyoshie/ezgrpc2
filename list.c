@@ -31,6 +31,7 @@ void *list_find(list_t *l, int (*cmp)(void *data, void *userdata), void *userdat
   return NULL;
 }
 
+/* remove */
 void *list_remove(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata) {
   listb_t **b = &l->head;
 
@@ -49,8 +50,8 @@ void *list_remove(list_t *l, int (*cmp)(void *data, void *userdata), void *userd
   return NULL;
 }
 
-/* appends to the end (tail) */
-int list_add(list_t *l, void *data){
+/* appends to the end (tail) (push front)*/
+int list_pushf(list_t *l, void *data){
   listb_t *b = malloc(sizeof(*b));
   if (b == NULL) {
     return 1;
@@ -63,8 +64,8 @@ int list_add(list_t *l, void *data){
   return 0;
 }
 
-/* pops the head */
-void *list_pop(list_t *l) {
+/* pops the head (pop back) */
+void *list_popb(list_t *l) {
   if (l == NULL || l->head == NULL ) {
     return NULL;
   }
@@ -79,7 +80,8 @@ void *list_pop(list_t *l) {
   return ret;
 }
 
-void *list_peek(list_t *l) {
+/* (peek back) */
+void *list_peekb(list_t *l) {
   if (l->head == NULL)
     return NULL;
 
@@ -101,18 +103,18 @@ int cmp(void *data, void *userdata) {
 int main0() {
   list_t l;
   list_init(&l);
-  list_add(&l, (void*)0x123);
-  list_add(&l, (void*)0x13);
-  list_add(&l, (void*)0x23);
-  list_pop(&l);
-  list_add(&l, (void*)0x125);
-  list_add(&l, (void*)0x925);
-  list_pop(&l);
-  list_pop(&l);
-  list_add(&l, (void*)0x325);
+  list_pushf(&l, (void*)0x123);
+  list_pushf(&l, (void*)0x13);
+  list_pushf(&l, (void*)0x23);
+  list_popb(&l);
+  list_pushf(&l, (void*)0x125);
+  list_pushf(&l, (void*)0x925);
+  list_popb(&l);
+  list_popb(&l);
+  list_pushf(&l, (void*)0x325);
   if (list_remove(&l, cmp, (void*)0x125) == NULL)
     puts("hi");
-  list_add(&l, (void*)0x13);
+  list_pushf(&l, (void*)0x13);
 
   list_print(&l);
 

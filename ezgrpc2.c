@@ -461,7 +461,7 @@ static size_t parse_grpc_message(void *data, size_t len, list_t *list_messages) 
       assert(msg->data != NULL);
 
       memcpy(msg->data, msg_data, msg_len);
-      list_add(list_messages, msg);
+      list_pushf(list_messages, msg);
     }
     seek += msg_len;
   }
@@ -527,13 +527,13 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
     return 1;
   }
 
-  ezgrpc2_response_t *ezresponse = list_peek(list_response);
+  ezgrpc2_response_t *ezresponse = list_peekb(list_response);
   if (ezresponse == NULL) {
     *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
     return 0;
   }
 
-  ezgrpc2_message_t *msg = list_pop(&ezresponse->list_messages);
+  ezgrpc2_message_t *msg = list_popb(&ezresponse->list_messages);
   if (msg != NULL) {
     atlog("msg concat\n");
     buf[0] = msg->is_compressed;
@@ -545,7 +545,7 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
     return 5 + msg->len;
   }
   atlog("eof\n");
-  free(list_pop(list_response));
+  free(list_popb(list_response));
   return 0;
   */
 }
@@ -627,7 +627,7 @@ static int on_begin_headers_callback(nghttp2_session *session,
   ezstream->recv_len = 0;
   ezstream->recv_data = malloc(EZWINDOW_SIZE);
 
-  list_add(&ezsession->list_streams, ezstream);
+  list_pushf(&ezsession->list_streams, ezstream);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id ,ezstream);
   //ezsession->nb_open_streams++;
 
@@ -839,7 +839,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     event->dataloss.list_messages = list_messages;
 
 
-    list_add(&ezstream->path->list_events, event);
+    list_pushf(&ezstream->path->list_events, event);
     return 0;
   }
   if (lseek != 0) {
@@ -854,7 +854,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
     event->message.stream_id = frame->hd.stream_id;
 
-    list_add(&ezstream->path->list_events, event);
+    list_pushf(&ezstream->path->list_events, event);
     memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
     ezstream->recv_len -= lseek;
   }
@@ -1026,7 +1026,7 @@ static void session_free(ezgrpc2_session_t *ezsession) {
   nghttp2_session_del(ezsession->ngsession);
 
   ezgrpc2_stream_t *ezstream;
-  while ((ezstream = list_pop(&ezsession->list_streams)) != NULL)
+  while ((ezstream = list_popb(&ezsession->list_streams)) != NULL)
     stream_free(ezstream);
 
   close(ezsession->pfd[0]);
@@ -1212,6 +1212,10 @@ static int session_add(ezgrpc2_server_t *ezserver, int listenfd) {
 
 static int session_events(ezgrpc2_session_t *ezsession) {
   int res;
+  if (!nghttp2_session_want_read(ezsession->ngsession) &&
+      !nghttp2_session_want_write(ezsession->ngsession))
+    return 1;
+
   if (nghttp2_session_want_read(ezsession->ngsession) &&
       (res = nghttp2_session_recv(ezsession->ngsession)))
     if (res) {
@@ -1464,7 +1468,12 @@ int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t 
         server->sessions[i].nb_paths = nb_paths;
         server->sessions[i].paths = paths;
         if (session_events(&server->sessions[i])) {
-          shutdown(server->sessions[i].sockfd, SHUT_RDWR);
+          if (shutdown(server->sessions[i].sockfd, SHUT_RDWR)) {
+            perror("shutdown");
+          }
+          else if (close(server->sessions[i].sockfd)) {
+            perror("close");
+          }
           session_free(&server->sessions[i]);
           fds[i].fd = -1;
         }
@@ -1492,7 +1501,7 @@ int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stre
   size_t size = 0;
   EZSSIZE l, segment_size = EZSEGMENT_SIZE;
   ezgrpc2_message_t *msg;
-  while ((msg = list_pop(list_messages)) != NULL) {
+  while ((msg = list_popb(list_messages)) != NULL) {
     assert(1 + 4 + msg->len < segment_size);
     if (size + 1 + 4 + msg->len > segment_size) {
       nghttp2_submit_data2(ezsession->ngsession, 0, stream_id, &data_provider);
@@ -1575,5 +1584,19 @@ int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, u8 session_id[32], i3
   atlog("trailer submitted\n");
   nghttp2_submit_trailer(ezsession->ngsession, stream_id, trailers, 2);
   nghttp2_session_send(ezsession->ngsession);
+  return 0;
+}
+
+int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 last_stream_id, int error_code) {
+  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_id);
+  if (ezsession == NULL) {
+    /* session doesn't exists */
+    return 1;
+  }
+  nghttp2_submit_goaway(ezsession->ngsession, 0, last_stream_id, error_code, NULL, 0);
+  nghttp2_session_send(ezsession->ngsession);
+
+  //shutdown(ezsession->sockfd, SHUT_RDWR);
+  memset(ezsession->session_id, 0, 32);
   return 0;
 }

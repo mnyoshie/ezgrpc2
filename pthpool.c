@@ -1,4 +1,4 @@
-/* ppthpool.c - A pollable thread pool */
+/* pthpool.c - A pollable thread pool */
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -12,6 +12,7 @@
       abort();                                                                 \
     }                                                                          \
   } while (0)
+
 struct pthpool_t {
   size_t max_queue, max_finished;
 
@@ -45,11 +46,11 @@ static void *pthpool_worker(void *arg) {
   while (1) {
     force_assert(!pthread_mutex_lock(&pool->mutex));
     task_t *task;
-    while (!pool->stop && (task = list_pop(&pool->queue)) == NULL)
+    while (!pool->stop && (task = list_popb(&pool->queue)) == NULL)
       pthread_cond_wait(&pool->wcond, &pool->mutex);
     if (pool->stop) {
       if (task != NULL)
-        list_add(&pool->queue, task);
+        list_pushf(&pool->queue, task);
       break;
     }
 
@@ -68,7 +69,7 @@ static void *pthpool_worker(void *arg) {
       pool->nb_queue--;
       pool->nb_finished++;
 #endif
-      list_add(&pool->finished, task);
+      list_pushf(&pool->finished, task);
       pool->running--;
       force_assert(!pthread_mutex_unlock(&pool->mutex));
     }
@@ -107,8 +108,8 @@ pthpool_t *pthpool_init(int workers, int flags) {
 int pthpool_is_empty(pthpool_t *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int ret = pool->running == 0 &&
-    list_peek(&pool->finished) == NULL &&
-    list_peek(&pool->queue) == NULL;
+    list_peekb(&pool->finished) == NULL &&
+    list_peekb(&pool->queue) == NULL;
 
   force_assert(!pthread_mutex_unlock(&pool->mutex));
   return ret;
@@ -143,7 +144,7 @@ int pthpool_add_task2(pthpool_t *pool, void *(*func)(void*), void *userdata, voi
   task->userdata_cleanup = userdata_cleanup;
   task->ret_cleanup = ret_cleanup;
 
-  if (list_add(&pool->queue, task)) {
+  if (list_pushf(&pool->queue, task)) {
     c = 1;
     free(task);
     goto unlock;
@@ -185,14 +186,14 @@ void pthpool_destroy(pthpool_t *pool) {
     pthread_join(pool->threads[i], NULL);
 
   task_t *d;
-  while ((d = list_pop(&pool->finished)) != NULL) {
+  while ((d = list_popb(&pool->finished)) != NULL) {
     if (d->userdata_cleanup != NULL)
       d->userdata_cleanup(d->userdata);
     if (d->ret_cleanup != NULL)
       d->ret_cleanup(d->ret);
   }
 
-  while ((d = list_pop(&pool->queue)) != NULL)
+  while ((d = list_popb(&pool->queue)) != NULL)
     if (d->userdata_cleanup != NULL)
       d->userdata_cleanup(d->userdata);
 
@@ -215,7 +216,7 @@ int main0() {
     pthpool_poll(pthpool, &finished);
     //printf("polled %zu\n", c);
     task_t *r;
-    while ((r = list_pop(&finished)) != NULL) {
+    while ((r = list_popb(&finished)) != NULL) {
       free(r->userdata);
       free(r->ret);
       free(r);
@@ -225,20 +226,20 @@ int main0() {
   pthpool_destroy(pthpool);
   list_t l;
   list_init(&l);
-  list_add(&l, (void*)0x123);
-  list_add(&l, (void*)0x13);
-  list_add(&l, (void*)0x23);
-  list_pop(&l);
-  list_pop(&l);
-  list_add(&l, (void*)0x125);
-  list_add(&l, (void*)0x925);
-  list_pop(&l);
-  list_pop(&l);
-  list_pop(&l);
-  list_pop(&l);
-  list_pop(&l);
-  list_pop(&l);
-  list_add(&l, (void*)0x325);
+  list_pushf(&l, (void*)0x123);
+  list_pushf(&l, (void*)0x13);
+  list_pushf(&l, (void*)0x23);
+  list_popb(&l);
+  list_popb(&l);
+  list_pushf(&l, (void*)0x125);
+  list_pushf(&l, (void*)0x925);
+  list_popb(&l);
+  list_popb(&l);
+  list_popb(&l);
+  list_popb(&l);
+  list_popb(&l);
+  list_popb(&l);
+  list_pushf(&l, (void*)0x325);
 
   list_print(&l);
 
