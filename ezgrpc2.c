@@ -827,21 +827,6 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     return 0;
   list_t list_messages;
   size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, &list_messages);
-  /* we've receaived an end stream but last message is truncated */
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && lseek != ezstream->recv_len) {
-    atlog("event dataloss %zu\n", list_count(&list_messages));
-    ezgrpc2_event_t *event = malloc(sizeof(*event));
-    event->type = EZGRPC2_EVENT_DATALOSS;
-    memcpy(event->session_id, ezsession->session_id, sizeof(ezsession->session_id));
-    //event->ezsession = ezsession;
-
-    event->dataloss.stream_id = ezstream->stream_id;
-    event->dataloss.list_messages = list_messages;
-
-
-    list_pushf(&ezstream->path->list_events, event);
-    return 0;
-  }
   if (lseek != 0) {
     assert(lseek <= ezstream->recv_len);
     atlog("event message %zu\n", list_count(&list_messages));
@@ -857,6 +842,18 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     list_pushf(&ezstream->path->list_events, event);
     memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
     ezstream->recv_len -= lseek;
+  }
+  /* we've receaived an end stream but last message is truncated */
+  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
+    atlog("event dataloss %zu\n", list_count(&list_messages));
+    ezgrpc2_event_t *event = malloc(sizeof(*event));
+    event->type = EZGRPC2_EVENT_DATALOSS;
+    memcpy(event->session_id, ezsession->session_id, sizeof(ezsession->session_id));
+    //event->ezsession = ezsession;
+
+    event->dataloss.stream_id = ezstream->stream_id;
+
+    list_pushf(&ezstream->path->list_events, event);
   }
 
   return 0;

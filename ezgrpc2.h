@@ -92,7 +92,7 @@ struct ezgrpc2_event_message_t {
 typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;
 struct ezgrpc2_event_dataloss_t {
   /* cast list_popb to ``ezgrpc2_message_t *`` */
-  list_t list_messages;
+  //list_t list_messages;
   i32 stream_id;
 };
 

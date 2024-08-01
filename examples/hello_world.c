@@ -1,3 +1,6 @@
+/* The author disclaims copyright to this source code
+ * and releases it into the public domain.
+ */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -6,15 +9,6 @@
 
 #include "ezgrpc2.h"
 #include "pthpool.h"
-
-void ret_cleanup(void *p) {
-  puts("called ret_cleanup");
-  free(p);
-}
-void usrdata_cleanup(void *p) {
-  puts("called usrdata_cleanup");
-  free(p);
-}
 
 struct userdata_t {
   uint8_t session_id[32];
@@ -35,18 +29,11 @@ struct userdata_t *create_userdata(uint8_t session_id[32], int32_t stream_id,
 
 int pp = 0;
 void *callback(void *data){
+  printf("task executed!!\n");
   struct userdata_t *usrdata = data;
-  list_t *list_imessages = &usrdata->list_imessages;
-  {
-    ezgrpc2_message_t *msg;
-    while ((msg = list_popb(list_imessages)) != NULL) {
-      free(msg->data);
-      free(msg);
-    }
-  }
-
   list_init(&usrdata->list_omessages);
-  
+
+  /* pretend this is our response (output messages) */
   for (int i = 0; i < 5; i++, pp++) {
     ezgrpc2_message_t *msg = malloc(sizeof(*msg));
     msg->is_compressed = 0;
@@ -56,42 +43,66 @@ void *callback(void *data){
     *(uint32_t*)(msg->data) = pp;
     list_pushf(&usrdata->list_omessages, msg);
   }
-  printf("task executed!!\n");
+
+
+  /* cleanup (input messages) */
+  list_t *list_imessages = &usrdata->list_imessages;
+  {
+    ezgrpc2_message_t *msg;
+    while ((msg = list_popb(list_imessages)) != NULL) {
+      free(msg->data);
+      free(msg);
+    }
+  }
+
   return data;
 }
 
 
 int main() {
-#ifdef _WIN32
-#else
+#ifdef __unix__
   signal(SIGPIPE, SIG_IGN);
 #endif
 
-#if 0
-  while (1) {
-    printf("task\n");
-    list_t *l = thpool_poll(pool);
-    task_t *t;
-    while ((t = list_popb(l)) != NULL) {
-      printf("popped\n");
-      free(t);
-    }
-    free(l);
-  }
-#endif
   pthpool_t *pool = pthpool_init(1, -1);
   assert(pool != NULL);
   //ezgrpc2_server_t *server = ezgrpc2_server_init("127.0.0.1", 19009, NULL, -1, 16);
   ezgrpc2_server_t *server = ezgrpc2_server_init(NULL, -1, "::", 19009, 16);
   assert(server != NULL);
 
-  ezgrpc2_path_t paths[2] = {0};
+  const size_t nb_paths = 2;
+  ezgrpc2_path_t paths[nb_paths];
   paths[0].path = "/test.yourAPI/whatever_service1";
   paths[1].path = "/test.yourAPI/someservice";
   list_init(&paths[0].list_events);
   list_init(&paths[1].list_events);
-  int res;
 
+
+
+
+  //  gRPC allows clients make concurent requests to a server in
+  //  single connection by making use of stream id in HTTP2.
+  //  
+  //  A gRPC request to a server, at it's bare minimum, must have a `path`
+  //  and a `grpc message`.
+  //  
+  //  When a client makes a requests, that request is not necessarily immediately
+  //  executed, instead, the request is added to the queue in the thread pool,
+  //  waiting to be executed among other requests.
+  //  
+  //  When the tasks has been executed, the result is added to the finished
+  //  queue, waiting to be pulled off with, `thpool_poll()`. After that
+  //  we can then send our results.
+  //  
+  //  So basically, we have a loop of:
+  //  
+  //    1. Get server events. (server poll)
+  //    2. Add tasks to the thread pool. (give the task to thread pool).
+  //    3. Get finish taskes from the thread pool (thread pool poll)
+  //    4. Send the results. (give the result to the client)
+
+
+  int res;
   while (1) {
     /* if thread pool is empty, maybe we can give our resources to the cpu
      * and wait a little longer.
@@ -99,46 +110,66 @@ int main() {
     res = ezgrpc2_server_poll(server, paths, 2, pthpool_is_empty(pool) ? 10000 : 5);
     if (res > 0) {
       ezgrpc2_event_t *event;
-      while ((event = list_popb(&paths[0].list_events)) != NULL) {
-        switch(event->type) {
-          case EZGRPC2_EVENT_MESSAGE:
-            printf("event message %zu end stream %d\n", list_count(&event->message.list_messages), event->message.end_stream);
-#if 1
-            struct userdata_t *data = create_userdata(
-                event->session_id, event->message.stream_id,
-                event->message.list_messages,
-                event->message.end_stream);
-            /* clear */
-            list_init(&event->message.list_messages);
-
-            pthpool_add_task(pool, callback, data, NULL, NULL);
-#else
-            ezgrpc2_session_end_session(server, event->session_id, 0, 0);
-#endif
-            break;
-          case EZGRPC2_EVENT_DATALOSS:
-            printf("event dataloss\n");
-            break;
-          case EZGRPC2_EVENT_CANCEL:
-            printf("event cancel on stread %d\n\n", event->cancel.stream_id);
-            break;
-        }
-        free(event);
-      }
-    }
+      /* check for events in the paths */
+      for (size_t i = 0; i < nb_paths; i++) {
+        while ((event = list_popb(&paths[i].list_events)) != NULL) {
+          switch(event->type) {
+            case EZGRPC2_EVENT_MESSAGE:
+              printf("event message %zu end stream %d\n", list_count(&event->message.list_messages), event->message.end_stream);
+  #if 1
+              struct userdata_t *data = create_userdata(
+                  event->session_id, event->message.stream_id,
+                  event->message.list_messages,
+                  event->message.end_stream);
+              /* we've taken ownership of this. clear */
+              list_init(&event->message.list_messages);
+  
+              pthpool_add_task(pool, callback, data, NULL, NULL);
+  #else
+              ezgrpc2_session_end_session(server, event->session_id, 0, 0);
+  #endif
+              break;
+            case EZGRPC2_EVENT_DATALOSS:
+              printf("event dataloss\n");
+              break;
+            case EZGRPC2_EVENT_CANCEL:
+              printf("event cancel on stread %d\n\n", event->cancel.stream_id);
+              // FIXME: HANDLE ME
+              break;
+          } /* switch */
+          free(event);
+        } /* while() */
+      } /* for() */
+    } /* if (res > 0) */
     else if (res < 0) {
-      printf("here error\n");
-      assert(0);
+      printf("poll error\n");
+      goto exit;
     }
     else if (res == 0) {
       printf("no event\n");
     }
-    //printf("heredjndjd\n");
+
+
+
     list_t list_tasks;
     pthpool_poll(pool, &list_tasks);
     task_t *task;
     while ((task = list_popb(&list_tasks)) != NULL) {
+      if (task->is_timeout) {
+        /* when task has timeout, it is not executed so
+         * task->ret is always NULL */
+        assert(task->ret == NULL);
+        /* make sure to also cleanup the userdata struct which
+         * I have not done.
+         */
+        free(task->userdata);
+        free(task);
+        continue;
+      }
       struct userdata_t *data = task->ret;
+      /* ezgrpc2_session_send() will take ownership of list of messages if it succeeds,
+       * otherwise you will have to manually free it.
+       */
       switch (ezgrpc2_session_send(server, data->session_id, data->stream_id, &data->list_omessages)){
         case 0:
          /* ok */
@@ -171,6 +202,9 @@ int main() {
       free(task);
     }
   }
+
+exit:
   ezgrpc2_server_destroy(server);
   pthpool_destroy(pool);
+  return res;
 }
