@@ -147,8 +147,8 @@ extern "C" {
 
 
 ezgrpc2_server_t *ezgrpc2_server_init(
-    char *ipv4_addr, u16 ipv4_port,
-    char *ipv6_addr, u16 ipv6_port,
+    const char *ipv4_addr, u16 ipv4_port,
+    const char *ipv6_addr, u16 ipv6_port,
     int backlog);
 int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t nb_paths, int timeout);
 

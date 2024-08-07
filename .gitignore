@@ -1,6 +1,7 @@
 a.out
 *.o
 *.bin
+*cpp
 core
 test*.c
 *.swp

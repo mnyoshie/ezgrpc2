@@ -13,12 +13,16 @@ CFLAGS += -I. -ggdb3 -fsanitize=address
 CFLAGS += -Wall
 #CFLAGS += -Wextra
 
-targets += examples/hello_world.bin
+targets += examples/hello_worldc.bin
+#targets += examples/hello_worldcpp.bin
 
 all: $(targets)
 
-%.bin: %.o ezgrpc2.o list.o pthpool.o
+%c.bin: %c.o ezgrpc2.o list.o pthpool.o
 	$(Q)$(CC) $^ $(LDFLAGS) -o $@
+
+%cpp.bin: %cpp.cpp ezgrpc2.cpp  ezgrpc2.o list.o pthpool.o
+	$(Q)$(CXX) $^ $(CFLAGS) $(LDFLAGS) -o $@
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $< -o $@

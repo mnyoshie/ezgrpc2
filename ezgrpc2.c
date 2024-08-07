@@ -1265,7 +1265,14 @@ static int session_events(ezgrpc2_session_t *ezsession) {
 `-----------------------------------------------------*/
 
 void ezgrpc2_server_destroy(ezgrpc2_server_t *s) {
-  for (EZNFDS i = 0; i < s->nb_fds; i++)
+  for (EZNFDS i = 0; i < 2; i++)
+  {
+    if (s->fds[i].fd != -1) {
+      shutdown(s->fds[i].fd, SHUT_RDWR);
+    }
+  }
+
+  for (EZNFDS i = 2; i < s->nb_fds; i++)
   {
     if (s->fds[i].fd != -1) {
       shutdown(s->fds[i].fd, SHUT_RDWR);
@@ -1279,7 +1286,7 @@ void ezgrpc2_server_destroy(ezgrpc2_server_t *s) {
   free(s);
 }
 
-ezgrpc2_server_t *ezgrpc2_server_init(char *ipv4_addr, u16 ipv4_port, char *ipv6_addr, u16 ipv6_port, int backlog) {
+ezgrpc2_server_t *ezgrpc2_server_init(const char *ipv4_addr, u16 ipv4_port, const char *ipv6_addr, u16 ipv6_port, int backlog) {
   struct sockaddr_in ipv4_saddr = {0};
   struct sockaddr_in6 ipv6_saddr = {0};
   ezgrpc2_server_t *server = NULL;
