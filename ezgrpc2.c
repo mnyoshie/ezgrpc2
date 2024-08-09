@@ -49,8 +49,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <uuid/uuid.h>
 #include <openssl/rand.h>
 #include <nghttp2/nghttp2.h>
+
+_Static_assert(UUID_STR_LEN == EZGRPC2_SESSION_UUID_LEN, "");
 
 #include "ansicolors.h"
 
@@ -151,6 +154,8 @@ struct ezgrpc2_stream_t {
 typedef struct ezgrpc2_session_t ezgrpc2_session_t;
 struct ezgrpc2_session_t {
   u8 session_id[32];
+  char session_uuid[37];
+
   EZSOCKET sockfd;
   struct sockaddr_storage sockaddr;
   EZSOCKLEN socklen;
@@ -833,7 +838,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     ezgrpc2_event_t *event = malloc(sizeof(*event));
     event->type = EZGRPC2_EVENT_MESSAGE;
     //event->ezsession = ezsession;
-    memcpy(event->session_id, ezsession->session_id, sizeof(ezsession->session_id));
+    memcpy(event->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
 
     event->message.list_messages = list_messages;
     event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
@@ -848,7 +853,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     atlog("event dataloss %zu\n", list_count(&list_messages));
     ezgrpc2_event_t *event = malloc(sizeof(*event));
     event->type = EZGRPC2_EVENT_DATALOSS;
-    memcpy(event->session_id, ezsession->session_id, sizeof(ezsession->session_id));
+    memcpy(event->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
     //event->ezsession = ezsession;
 
     event->dataloss.stream_id = ezstream->stream_id;
@@ -1028,7 +1033,8 @@ static void session_free(ezgrpc2_session_t *ezsession) {
 
   close(ezsession->pfd[0]);
   close(ezsession->pfd[1]);
-  memset(ezsession->session_id, 0, sizeof(ezsession->session_id));
+ // memset(ezsession->session_id, 0, sizeof(ezsession->session_id));
+  memset(ezsession->session_uuid, 0, sizeof(ezsession->session_uuid));
 
   *(char*)ezsession = 0;
 }
@@ -1037,9 +1043,9 @@ static void session_free(ezgrpc2_session_t *ezsession) {
 
 
 
-static ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, u8 session_id[32]) {
+static ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, char session_uuid[EZGRPC2_SESSION_UUID_LEN]) {
   for (size_t i = 0; i < nb_ezsessions; i++)
-    if (!ezmemcmp(ezsessions[i].session_id, session_id, 32))
+    if (!ezmemcmp(ezsessions[i].session_uuid, session_uuid, EZGRPC2_SESSION_UUID_LEN))
       return ezsessions + i;
 
   return NULL;
@@ -1159,10 +1165,9 @@ static int session_create(
   }
   makenonblock(ezsession->pfd[0]);
 #endif
-  if (RAND_bytes((void*)ezsession->session_id, sizeof(ezsession->session_id)) != 1) {
-    atlog("failed to generate rand bytes\n");
-    return 1;
-  }
+  uuid_t uuid;
+  uuid_generate_random(uuid);
+  uuid_unparse_lower(uuid, ezsession->session_uuid);
   //ezsession->alive = 1;
 
   /*  all seems to be successful. set the following */
@@ -1489,9 +1494,9 @@ int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t 
   return ready;
 }
 
-int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, list_t *list_messages) {
+int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t *list_messages) {
 
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_id);
+  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     return 1;
   }
@@ -1533,8 +1538,8 @@ int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stre
   return 0;
 }
 
-int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, u8 *data, size_t len) {
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_id);
+int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, u8 *data, size_t len) {
+  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     /* session doesn't exists */
     return 1;
@@ -1567,8 +1572,8 @@ int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 str
   return 0;
 }
 
-int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, int status) {
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_id);
+int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, int status) {
+  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     return 1;
   }
@@ -1591,8 +1596,8 @@ int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, u8 session_id[32], i3
   return 0;
 }
 
-int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 last_stream_id, int error_code) {
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_id);
+int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 last_stream_id, int error_code) {
+  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     /* session doesn't exists */
     return 1;

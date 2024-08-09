@@ -1,6 +1,7 @@
 LDFLAGS += -lnghttp2
 LDFLAGS += -lpthread
 LDFLAGS += -lcrypto
+LDFLAGS += -luuid
 
 ifeq ($(OS),Windows_NT)
 	LDFLAGS += -lWs2_32

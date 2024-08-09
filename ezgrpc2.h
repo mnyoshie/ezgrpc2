@@ -16,6 +16,7 @@
 #endif
 
 #define EZGRPC_MAX_SESSIONS 32
+#define EZGRPC2_SESSION_UUID_LEN 37
 
 
 typedef char i8;
@@ -98,7 +99,9 @@ struct ezgrpc2_event_dataloss_t {
 
 typedef struct ezgrpc2_event_t ezgrpc2_event_t;
 struct ezgrpc2_event_t {
-  uint8_t session_id[32]; 
+
+  //uint8_t session_id[32]; 
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN];
  // ezgrpc2_session_t *ezsession;
   ezgrpc2_event_type_t type;
 
@@ -157,10 +160,10 @@ void ezgrpc2_server_destroy(ezgrpc2_server_t *server);
 //int ezgrpc2_session_submit_response(ezgrpc2_session_t *ezsession, i32 stream_id, list_t *list_messages, int end_stream, int grpc_status);
 
 
-int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, list_t *list_messages);
-int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 stream_id, int status);
+int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t *list_messages);
+int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, char session_id[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, int status);
 
-int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, u8 session_id[32], i32 last_stream_id, int error_code);
+int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, char session_id[EZGRPC2_SESSION_UUID_LEN], i32 last_stream_id, int error_code);
 
 #ifdef __cplusplus
 }
