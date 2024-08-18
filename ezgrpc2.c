@@ -1,4 +1,5 @@
-/* ezgrpc2.c - a (crude) grpc server without the extra fancy
+/* ezgrpc2.c - a grpc server without the extra fancy
+#define atlog(fmt, ...) ezlog("@ %s: " fmt, __func__, ##__VA_ARGS__)
  * features
  *
  *
@@ -110,7 +111,8 @@ static char *strndup(char *c, size_t n) {
 
 _Static_assert(EZPIPE_SIZE > EZSEGMENT_SIZE, "environment is insane");
 
-#define atlog(fmt, ...) ezlog("@ %s: " fmt, __func__, ##__VA_ARGS__)
+//#define atlog(fmt, ...) ezlog("@ %s: " fmt, __func__, ##__VA_ARGS__)
+#define atlog(fmt, ...) (void)0
 
 #define EZENABLE_DEBUG
 #define ezlogm(...) \
@@ -148,6 +150,8 @@ struct ezgrpc2_stream_t {
   /* recv_data */
   size_t recv_len;
   u8 *recv_data;
+
+  list_t queue_omessages;
 
 };
 
@@ -226,7 +230,7 @@ static int ezmemcmp(void *restrict a, void *restrict b, size_t l) {
   return 0;
 }
 
-static i8 *grpc_status2str(ezgrpc_status_code_t status) {
+static i8 *grpc_status2str(ezgrpc2_status_code_t status) {
   switch (status) {
     case EZGRPC2_STATUS_OK:
       return "ok";
@@ -707,11 +711,13 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
   if (!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) return 0;
   /* if we've received an end stream in headers frame. send an RST. we
    * expected a data */
+#if 0
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
     nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
                               frame->hd.stream_id, 1);
     return 0;
   }
+#endif
  
   ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, frame->hd.stream_id);
      // (void*)&frame->hd.stream_id);
@@ -721,6 +727,27 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
                               1);  // XXX send appropriate code
     return 0;
   }
+  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && !ezstream->is_content_grpc) {
+    nghttp2_nv nva[1] =
+    {
+        {
+          .name = (void *)":status", .namelen= 7,
+          .value = (void *)"415", .valuelen= 3,
+          .flags=NGHTTP2_NV_FLAG_NONE
+        },
+    };
+    if (nghttp2_submit_headers(ezsession->ngsession, NGHTTP2_FLAG_END_STREAM,
+        ezstream->stream_id, NULL, nva, 1, NULL)){assert(0);}
+
+    return 0;
+  }
+
+  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
+                              frame->hd.stream_id, 1);
+    return 0;
+  }
+
   if (!(ezstream->is_method_post && ezstream->is_scheme_http &&
         ezstream->is_te_trailers && ezstream->is_content_grpc)) {
     nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
@@ -741,8 +768,8 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
       },
   };
 
-  i32 id = nghttp2_submit_headers(ezsession->ngsession, 0, ezstream->stream_id, NULL, nva, 2,
-                           NULL);
+  if (nghttp2_submit_headers(ezsession->ngsession, 0, ezstream->stream_id, NULL, nva, 2,
+                           NULL)) {assert(0);}
   if (ezstream->path == NULL) {
     atlog("path null, submitting req\n");
     int status = EZGRPC2_STATUS_UNIMPLEMENTED;
@@ -756,7 +783,7 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
     };
     atlog("trailer submitted\n");
     nghttp2_submit_trailer(ezsession->ngsession, frame->hd.stream_id, trailers, 2);
-    nghttp2_session_send(ezsession->ngsession);
+   // nghttp2_session_send(ezsession->ngsession);
    // ezgrpc2_session_end_stream(ezsession, ezstream->stream_id, EZGRPC2_STATUS_UNIMPLEMENTED);
     return 0;
   }
@@ -831,6 +858,25 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
   if (ezstream->path == NULL)
     return 0;
   list_t list_messages;
+  list_init(&list_messages);
+
+  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0) {
+    /* In scenarios where the Request stream needs to be closed but no data remains
+     * to be sent implementations MUST send an empty DATA frame with this flag set. */
+    atlog("event message %zu\n", list_count(&list_messages));
+    ezgrpc2_event_t *event = malloc(sizeof(*event));
+    event->type = EZGRPC2_EVENT_MESSAGE;
+    //event->ezsession = ezsession;
+    memcpy(event->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
+
+    event->message.list_messages = list_messages;
+    event->message.end_stream = 1;
+    event->message.stream_id = frame->hd.stream_id;
+
+    list_pushf(&ezstream->path->list_events, event);
+    return 0;
+  }
+
   size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, &list_messages);
   if (lseek != 0) {
     assert(lseek <= ezstream->recv_len);
@@ -854,7 +900,6 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     ezgrpc2_event_t *event = malloc(sizeof(*event));
     event->type = EZGRPC2_EVENT_DATALOSS;
     memcpy(event->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
-    //event->ezsession = ezsession;
 
     event->dataloss.stream_id = ezstream->stream_id;
 
@@ -1043,6 +1088,9 @@ static void session_free(ezgrpc2_session_t *ezsession) {
 
 
 
+
+
+
 static ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, char session_uuid[EZGRPC2_SESSION_UUID_LEN]) {
   for (size_t i = 0; i < nb_ezsessions; i++)
     if (!ezmemcmp(ezsessions[i].session_uuid, session_uuid, EZGRPC2_SESSION_UUID_LEN))
@@ -1081,6 +1129,10 @@ static int session_create(
     assert(0);  // TODO
   }
 
+
+  /**********************.
+  |     INIT NGHTTP2     |
+  `---------------------*/
   server_setup_ngcallbacks(ngcallbacks);
 
   res =
@@ -1143,6 +1195,7 @@ static int session_create(
       fprintf(stderr, "fatal: invalid family\n");
       return 1;
   }
+  /*  all seems to be successful. set the following */
   list_init(&ezsession->list_streams);
 #ifdef _WIN32
   if (_pipe(ezsession->pfd, EZPIPE_SIZE, O_BINARY) != 0) {
@@ -1170,7 +1223,6 @@ static int session_create(
   uuid_unparse_lower(uuid, ezsession->session_uuid);
   //ezsession->alive = 1;
 
-  /*  all seems to be successful. set the following */
   return res;
 }
 
@@ -1195,12 +1247,14 @@ static int session_add(ezgrpc2_server_t *ezserver, int listenfd) {
   if (ndx == -1) {
     ezlog("max clients reached\n");
     shutdown(confd, SHUT_RDWR);
+    close(confd);
     return 1;
   }
 
   if (session_create(&ezserver->sessions[ndx], confd, &sockaddr, sockaddr_len, ezserver)) {
     atlog("session create failed\n");
     shutdown(confd, SHUT_RDWR);
+    close(confd);
     return 1;
   }
   fds[ndx].fd = confd;
@@ -1265,15 +1319,15 @@ static int session_events(ezgrpc2_session_t *ezsession) {
 
 
 
-/*-----------------------------------------------------.
-| API FUNCTIONS: You will only have to care about this |
-`-----------------------------------------------------*/
+/*------------------------------------------------------.
+| API FUNCTIONS: You will only have to care about these |
+`------------------------------------------------------*/
 
 void ezgrpc2_server_destroy(ezgrpc2_server_t *s) {
   for (EZNFDS i = 0; i < 2; i++)
   {
     if (s->fds[i].fd != -1) {
-      shutdown(s->fds[i].fd, SHUT_RDWR);
+      close(s->fds[i].fd);
     }
   }
 
@@ -1281,6 +1335,7 @@ void ezgrpc2_server_destroy(ezgrpc2_server_t *s) {
   {
     if (s->fds[i].fd != -1) {
       shutdown(s->fds[i].fd, SHUT_RDWR);
+      close(s->fds[i].fd);
       session_free(&s->sessions[i]);
     }
   }
@@ -1290,6 +1345,15 @@ void ezgrpc2_server_destroy(ezgrpc2_server_t *s) {
   free(s->ipv6_addr);
   free(s);
 }
+
+
+
+
+
+
+
+
+
 
 ezgrpc2_server_t *ezgrpc2_server_init(const char *ipv4_addr, u16 ipv4_port, const char *ipv6_addr, u16 ipv6_port, int backlog) {
   struct sockaddr_in ipv4_saddr = {0};
@@ -1435,10 +1499,6 @@ ezgrpc2_server_t *ezgrpc2_server_init(const char *ipv4_addr, u16 ipv4_port, cons
   WSACleanup();
 #endif
 
-  /**********************.
-  |     INIT NGHTTP2     |
-  `---------------------*/
-
   /* start accepting connections */
 
   return server;
@@ -1447,52 +1507,64 @@ err:
   ezgrpc2_server_destroy(server);
   return NULL;
 }
-  
 
-/* the ezgrpc2_server_poll function polls the server for any clients making a request to paths
- * appointed by ``paths``.a
- */
+
+
+
+
+
+
+
+
+
 int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t nb_paths, int timeout) {
   struct pollfd *fds = server->fds;
   const EZNFDS nb_fds = server->nb_fds;
 
   const int ready = EZPOLL(fds, nb_fds, timeout);
+  if (ready <= 0)
+    return ready;
 
-  if (ready > 0) {
-    if (fds[0].revents & POLLIN)
-      session_add(server, fds[0].fd);
-    if (fds[1].revents & POLLIN)
-      session_add(server, fds[1].fd);
+    // add ipv4 session
+  if (fds[0].revents & POLLIN)
+    session_add(server, fds[0].fd);
+  // add ipv6 session
+  if (fds[1].revents & POLLIN)
+    session_add(server, fds[1].fd);
 
-    for (nfds_t i = 2; i < nb_fds; i++) {
-      if (fds[i].fd != -1 && fds[i].revents & (POLLRDHUP | POLLERR)) {
-        ezlog("c hangup\n");
-        session_free(&server->sessions[i]);
-        fds[i].fd = -1;
-        fds[i].revents = 0;
-        //sleep(30);
-        continue;
-      }
-      if (fds[i].fd != -1 && fds[i].revents & POLLIN) {
-        server->sessions[i].nb_paths = nb_paths;
-        server->sessions[i].paths = paths;
-        if (session_events(&server->sessions[i])) {
-          if (shutdown(server->sessions[i].sockfd, SHUT_RDWR)) {
-            perror("shutdown");
-          }
-          else if (close(server->sessions[i].sockfd)) {
-            perror("close");
-          }
-          session_free(&server->sessions[i]);
-          fds[i].fd = -1;
+  for (nfds_t i = 2; i < nb_fds; i++) {
+    if (fds[i].fd != -1 && fds[i].revents & (POLLRDHUP | POLLERR)) {
+      ezlog("c hangup\n");
+      session_free(&server->sessions[i]);
+      fds[i].fd = -1;
+      fds[i].revents = 0;
+      //sleep(30);
+      continue;
+    }
+    if (fds[i].fd != -1 && fds[i].revents & POLLIN) {
+      server->sessions[i].nb_paths = nb_paths;
+      server->sessions[i].paths = paths;
+      if (session_events(&server->sessions[i])) {
+        if (close(server->sessions[i].sockfd)) {
+          perror("close");
         }
-        fds[i].revents = 0;
+        fds[i].fd = -1;
+        session_free(&server->sessions[i]);
       }
+      fds[i].revents = 0;
     }
   }
 
   return ready;
 }
+
+
+
+
+
+
+
+
 
 int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t *list_messages) {
 
@@ -1538,6 +1610,19 @@ int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_S
   return 0;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, u8 *data, size_t len) {
   ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
@@ -1571,6 +1656,14 @@ int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_
   nghttp2_session_send(ezsession->ngsession);
   return 0;
 }
+
+
+
+
+
+
+
+
 
 int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, int status) {
   ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);

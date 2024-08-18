@@ -1,5 +1,9 @@
 /* The author disclaims copyright to this source code
  * and releases it into the public domain.
+ *
+ * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  */
 #include <stdio.h>
 #include <string.h>
@@ -35,7 +39,8 @@ struct userdata_t *create_userdata(char session_uuid[EZGRPC2_SESSION_UUID_LEN], 
   return data;
 }
 
-int pp = 0;
+_Atomic int pp = 0;
+/* No ezgrpc2_* functions must be called in this callback */
 void *callback_path0(void *data){
   printf("task executed path0!!\n");
   struct userdata_t *usrdata = data;
@@ -68,6 +73,7 @@ void *callback_path0(void *data){
   return data;
 }
 
+/* No ezgrpc2_* functions must be called in this callback */
 void *callback_path1(void *data){
   printf("task executed path1!!\n");
   struct userdata_t *usrdata = data;
@@ -118,6 +124,15 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
     path_userdata = paths[i].userdata;
     while ((event = list_popb(&paths[i].list_events)) != NULL) {
       switch(event->type) {
+        case EZGRPC2_EVENT_HEADER: {
+          ezgrpc2_header_t *header;
+          while ((header = list_popb(&event->header.list_headers)) != NULL) {
+            free(header->name);
+            free(header->value);
+            free(header);
+          }
+          printf("event header\n");
+        }  break;
         case EZGRPC2_EVENT_MESSAGE:
           printf("event message %zu end stream %d\n",
               list_count(&event->message.list_messages), event->message.end_stream);
@@ -139,7 +154,7 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
           list_init(&event->message.list_messages);
 
           /* add task to pool */
-          /* if path is unary, add task to upool, else add to opool */
+          /* if path/service is unary, add task to upool, else add to opool */
           if (path_userdata->is_unary)
             pthpool_add_task(upool, path_userdata->callback, data, NULL, NULL);
           else
@@ -161,8 +176,13 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
            * there are no messages to process.
            *
            * We will not be getting a EZGRPC2_EVENT_MESSAGE with end stream in this
-           * stream. This the last.
-           * */
+           * stream. This is the last.
+           */
+
+
+          /* You may also send a status "EZGRPC2_STATUS_DATA_LOSS", when the message
+           * failed to be deserialized.
+           */
           data = create_userdata(
               event->session_uuid, event->dataloss.stream_id,
               (list_t){NULL, NULL},
@@ -192,11 +212,12 @@ static void handle_thread_pool(ezgrpc2_server_t *server, pthpool_t *pool) {
  while ((task = list_popb(&list_tasks)) != NULL) {
    struct userdata_t *data = task->ret;
    if (task->is_timeout) {
-     /* when task has timeout, it is not executed so
-      * task->ret is always NULL */
      assert(task->ret == NULL);
      free_list_messages(&data->list_imessages);
      free(task->userdata);
+     /* when task has timeout, it is not executed so
+      * task->ret is always NULL */
+     free(task->ret); // No effect
      free(task);
      continue;
    }
@@ -228,14 +249,33 @@ static void handle_thread_pool(ezgrpc2_server_t *server, pthpool_t *pool) {
   } /* while() */
 }
 
+
+
+
+
+///////////////////////////////////////////////////////////
+
+
+
+
+
 int main() {
 #ifdef __unix__
+  /* In a real application, user must configure the server
+   * to handle SIGTERM, and make sure to prevent these
+   * signal from propagating through the main threads and
+   * pool threads via pthread_sigmask(SIG_BLOCK, ...) for
+   * the signal handler and pthread_sigmask(SIG_SETMASK, ...)
+   * for the rest. This is skipped.
+   */
   signal(SIGPIPE, SIG_IGN);
 #endif
 
   /* Tasks for unary requests (single message with end stream) */
   pthpool_t *unordered_pool = NULL;
-  /* Tasks for streaming requests (multiple messages in a stream) */
+  /* Tasks for streaming requests (multiple messages in a stream).
+   * streaming rpc is generally slower than unary request since
+   * the messages must be ordered and hence can't be parallelize */
   pthpool_t *ordered_pool = NULL;
 
   unordered_pool = pthpool_init(2, -1);
@@ -247,6 +287,11 @@ int main() {
   //ezgrpc2_server_t *server = ezgrpc2_server_init("127.0.0.1", 19009, NULL, -1, 16);
   ezgrpc2_server_t *server = ezgrpc2_server_init(NULL, -1, "::", 19009, 16);
   assert(server != NULL);
+
+
+  /*-----------------------------.
+  | What services do we provide? |
+  `-----------------------------*/
 
   const size_t nb_paths = 2;
   ezgrpc2_path_t paths[nb_paths];
@@ -283,7 +328,7 @@ int main() {
   //  waiting to be executed among other requests.
   //  
   //  When the tasks has been executed, the result is added to the finished
-  //  queue, waiting to be pulled off with, `thpool_poll()`. After that
+  //  queue, waiting to be pulled off with, `pthpool_poll()`. After that
   //  we can then send our results.
   //  
   //  So basically, we have a loop of:
@@ -296,23 +341,33 @@ int main() {
 
   int res;
   while (1) {
-    // 1. server poll
+    int is_pool_empty = pthpool_is_empty(unordered_pool) &&
+                        pthpool_is_empty(ordered_pool);
+
     /* if thread pool is empty, maybe we can give our resources to the cpu
      * and wait a little longer.
      */
-    int is_pool_empty = pthpool_is_empty(unordered_pool) &&
-                        pthpool_is_empty(ordered_pool);
-    if ((res = ezgrpc2_server_poll(server, paths, nb_paths, is_pool_empty ? 10000 : 5)) < 0)
+    int timeout = is_pool_empty ? 10000 : 10;
+
+#ifdef __unix__
+    // if sigterm flag has been set by the signal handler, break the loop and kill
+    // server.
+
+    /*   .... */
+#endif
+    // step 1. server poll
+    if ((res = ezgrpc2_server_poll(server, paths, nb_paths, timeout)) < 0)
       break;
 
     if (res > 0) {
-      // 2. Give the task to the thread pool
+      // step 2. Give the task to the thread pool
       handle_events(server, paths, nb_paths, ordered_pool, unordered_pool);
-    } /* if (res > 0) */
+    }
     else if (res == 0) {
       printf("no event\n");
+      // No server events, let's check the thread pool.
     }
-    // 3, 4 Get finish tasks and send results
+    // step 3, 4 Get finish tasks and send results
     handle_thread_pool(server, ordered_pool);
     handle_thread_pool(server, unordered_pool);
   }

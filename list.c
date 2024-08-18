@@ -64,6 +64,18 @@ int list_pushf(list_t *l, void *data){
   return 0;
 }
 
+int list_pushb(list_t *l, void *data){
+  listb_t *b = malloc(sizeof(*b));
+  if (b == NULL) {
+    return 1;
+  }
+  b->data = data;
+  b->next = l->head;
+
+  l->head = b;
+  return 0;
+}
+
 /* pops the head (pop back) */
 void *list_popb(list_t *l) {
   if (l == NULL || l->head == NULL ) {
@@ -88,6 +100,17 @@ void *list_peekb(list_t *l) {
   return l->head->data;
 }
 
+int list_pushf_list(list_t *dst, list_t *src) {
+  if (dst->head == NULL)
+    dst->head = src->head;
+  *dst->tail = src->head;
+  dst->tail = src->tail;
+  list_init(src);
+  return 0;
+
+}
+
+
 void list_print(list_t *l) {
   for (listb_t **p = &l->head; *p != NULL; p = &(*p)->next) {
     printf("%p\n",  (*p)->data);
@@ -100,7 +123,7 @@ int cmp(void *data, void *userdata) {
   return data == userdata;
 }
 
-int main0() {
+int main() {
   list_t l;
   list_init(&l);
   list_pushf(&l, (void*)0x123);
@@ -115,6 +138,7 @@ int main0() {
   if (list_remove(&l, cmp, (void*)0x125) == NULL)
     puts("hi");
   list_pushf(&l, (void*)0x13);
+  list_pushb(&l , (void*)0x535);
 
   list_print(&l);
 

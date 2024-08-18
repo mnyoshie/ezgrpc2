@@ -3,6 +3,8 @@ LDFLAGS += -lpthread
 LDFLAGS += -lcrypto
 LDFLAGS += -luuid
 
+.PHONY: push test
+
 ifeq ($(OS),Windows_NT)
 	LDFLAGS += -lWs2_32
 endif
@@ -14,7 +16,12 @@ CFLAGS += -I. -ggdb3 -fsanitize=address
 CFLAGS += -Wall
 #CFLAGS += -Wextra
 
-targets += examples/hello_worldc.bin
+tests = tests/test_listc.bin
+tests += tests/test_pthpoolc.bin
+tests += tests/test_ezgrpc2c.bin
+
+targets = examples/hello_worldc.bin
+targets += $(tests)
 #targets += examples/hello_worldcpp.bin
 
 all: $(targets)
@@ -31,6 +38,9 @@ all: $(targets)
 clean :
 	rm $(targets)
 
+test:
+	./tests/test_listc.bin
+	./tests/test_pthpoolc.bin
 
 push:
 	git add . && git commit -S && cat ~/kmnyoshie | \

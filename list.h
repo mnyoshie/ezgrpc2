@@ -14,7 +14,12 @@ struct list_t {
 void list_init(list_t *);
 size_t list_count(list_t *);
 int list_pushf(list_t *, void *);
+int list_pushb(list_t *, void *);
 void *list_popb(list_t *);
+
+
+int list_pushf_list(list_t *dst, list_t *src);
+
 void list_print(list_t *);
 
 void *list_find(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata);
