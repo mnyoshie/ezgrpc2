@@ -124,6 +124,7 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
     path_userdata = paths[i].userdata;
     while ((event = list_popb(&paths[i].list_events)) != NULL) {
       switch(event->type) {
+#if 0
         case EZGRPC2_EVENT_HEADER: {
           ezgrpc2_header_t *header;
           while ((header = list_popb(&event->header.list_headers)) != NULL) {
@@ -133,6 +134,7 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
           }
           printf("event header\n");
         }  break;
+#endif
         case EZGRPC2_EVENT_MESSAGE:
           printf("event message %zu end stream %d\n",
               list_count(&event->message.list_messages), event->message.end_stream);
@@ -224,7 +226,7 @@ static void handle_thread_pool(ezgrpc2_server_t *server, pthpool_t *pool) {
    /* ezgrpc2_session_send() will take ownership of list of messages if it succeeds,
     * otherwise you will have to manually free it.
     */
-   switch (ezgrpc2_session_send(server, data->session_uuid, data->stream_id, &data->list_omessages)){
+   switch (ezgrpc2_session_send(server, data->session_uuid, data->stream_id, data->list_omessages)){
      case 0:
       /* ok */
        if (data->end_stream)

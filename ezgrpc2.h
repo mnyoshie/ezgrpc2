@@ -1,4 +1,4 @@
-/* ezgrpc.c - A (crude) gRPC server in C. */
+/* ezgrpc2.c - A (crude) gRPC server in C. */
 
 #ifndef EZGRPC2_H
 #define EZGRPC2_H
@@ -64,7 +64,6 @@ enum ezgrpc2_event_type_t {
    * an end stream
    */
   EZGRPC2_EVENT_DATALOSS,
-  EZGRPC2_EVENT_HEADER,
 };
 typedef enum ezgrpc2_event_type_t ezgrpc2_event_type_t;
 
@@ -102,12 +101,6 @@ struct ezgrpc2_event_dataloss_t {
   i32 stream_id;
 };
 
-typedef struct ezgrpc2_event_header_t ezgrpc2_event_header_t;
-struct ezgrpc2_event_header_t {
-  i32 stream_id;
-  list_t list_headers;
-};
-
 typedef struct ezgrpc2_event_t ezgrpc2_event_t;
 struct ezgrpc2_event_t {
 
@@ -120,7 +113,6 @@ struct ezgrpc2_event_t {
     ezgrpc2_event_message_t message;
     ezgrpc2_event_dataloss_t dataloss;
     ezgrpc2_event_cancel_t cancel;
-    ezgrpc2_event_header_t header;
   };
 };
 
@@ -130,7 +122,7 @@ struct ezgrpc2_path_t {
   void *userdata;
 
   /* cast list_popb to ``ezgrpc2_event_t *`` */
-  /* Thus contains events for this specific path */
+  /* This contains events for this specific path */
   list_t list_events;
 };
 
@@ -159,9 +151,9 @@ extern "C" {
 
 
 ezgrpc2_server_t *ezgrpc2_server_init(
-    const char *ipv4_addr, u16 ipv4_port,
-    const char *ipv6_addr, u16 ipv6_port,
-    int backlog);
+  const char *ipv4_addr, u16 ipv4_port,
+  const char *ipv6_addr, u16 ipv6_port,
+  int backlog);
 
 
 /* the ezgrpc2_server_poll function polls the server for any clients making a request to paths
@@ -172,17 +164,71 @@ ezgrpc2_server_t *ezgrpc2_server_init(
  *
  *
  */
-int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t nb_paths, int timeout);
+int ezgrpc2_server_poll(
+  ezgrpc2_server_t *server,
+  ezgrpc2_path_t *paths,
+  size_t nb_paths,
+  int timeout);
 
-void ezgrpc2_server_destroy(ezgrpc2_server_t *server);
+void ezgrpc2_server_destroy(
+  ezgrpc2_server_t *server);
 
 //int ezgrpc2_session_submit_response(ezgrpc2_session_t *ezsession, i32 stream_id, list_t *list_messages, int end_stream, int grpc_status);
 
+/* On success, ezgrpc2_session_send takes ownership of list_messages 
+ *
+ * A sucessful return value may mean:
+ *
+ *   1 The message was sent.
+ *   2 The message is queued and pending, possible cause is
+ *     when the client HTTP2 window is full.
+ *
+ *
+ * Returns:
+ *   
+ *   0 on success
+ *
+ *   1 If the session doesn't exists
+ *
+ *   2 If the stream_id doesn't exists
+ *
+ */
+int ezgrpc2_session_send(
+  ezgrpc2_server_t *ezserver,
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  i32 stream_id,
+  list_t list_messages);
 
-int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t *list_messages);
-int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, char session_id[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, ezgrpc2_status_code_t status);
+int ezgrpc2_session_end_stream(
+  ezgrpc2_server_t *ezserver,
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  i32 stream_id,
+  ezgrpc2_status_code_t status);
 
-int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, char session_id[EZGRPC2_SESSION_UUID_LEN], i32 last_stream_id, ezgrpc2_status_code_t status);
+int ezgrpc2_session_end_session(
+  ezgrpc2_server_t *ezserver,
+  char session_id[EZGRPC2_SESSION_UUID_LEN],
+  i32 last_stream_id,
+  ezgrpc2_status_code_t status);
+
+/* list of ezgrpc2_header_t */
+list_t ezgrpc2_session_get_headers(
+  ezgrpc2_server_t *ezserver,
+  char session_id[EZGRPC2_SESSION_UUID_LEN],
+  i32 stream_id);
+
+/* returns the value for the header `name`. */
+/* returns NULL if it doesn't exists
+ * (or memory allocation failed (unlikely)).
+ *
+ * The address returned is a nul terminated string
+ * pointing to a dynamically allocated memory and must
+ * be freed after use.
+ * */
+char *ezgrpc2_session_find_header(
+  ezgrpc2_server_t *ezserver,
+  char session_id[EZGRPC2_SESSION_UUID_LEN],
+  char *name);
 
 #ifdef __cplusplus
 }

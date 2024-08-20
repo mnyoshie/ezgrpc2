@@ -144,6 +144,8 @@ struct ezgrpc2_stream_t {
   /* just a bool. if content type is application/grpc* */
   i8 is_content_grpc : 1;
 
+  i8 is_trunc : 1;
+
   /* stores `:path` */
   ezgrpc2_path_t *path;
 
@@ -151,7 +153,9 @@ struct ezgrpc2_stream_t {
   size_t recv_len;
   u8 *recv_data;
 
+  size_t trunc_seek;
   list_t queue_omessages;
+
 
 };
 
@@ -502,6 +506,70 @@ static void stream_free(ezgrpc2_stream_t *ezstream) {
 }
 
 static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
+                                         i32 stream_id, u8 *buf, size_t buf_len,
+                                         u32 *data_flags,
+                                         nghttp2_data_source *source,
+                                         void *user_data) {
+  atlog("called\n");
+//  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
+//  assert(ezstream != NULL);
+  ezgrpc2_stream_t *ezstream = source->ptr;
+  list_t *list_messages = &ezstream->queue_omessages;
+  ezgrpc2_message_t *msg;
+
+
+  size_t seek = 0;
+  while (1) {
+    if ((msg = list_peekb(list_messages)) == NULL) {
+      *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
+      return seek;
+    }
+    size_t rem;
+    if (ezstream->is_trunc) {
+      assert(buf_len >= seek);
+      if ((rem = buf_len - seek) == 0) {
+        /* buf is fully written */
+        goto exit;
+      }
+      assert(msg->len > ezstream->trunc_seek);
+      char is_fit = msg->len - ezstream->trunc_seek <= rem;
+      size_t to_write = is_fit ? msg->len - ezstream->trunc_seek :
+        rem;
+      memcpy(buf + seek, msg->data + ezstream->trunc_seek, to_write);
+      seek += to_write;
+
+      if (is_fit) {
+      /* the whole message can fit! */
+        (void)list_popb(list_messages);
+        ezstream->is_trunc = 0;
+        ezstream->trunc_seek = 0;
+        continue;
+      }
+      else /*if(msg->len > rem)*/ {
+        ezstream->trunc_seek += rem;
+        goto exit;
+      }
+    }
+    /* if we can fit 5 bytes or more to the buffer */
+    if (seek + 5 <= buf_len)  {
+      buf[seek++] = msg->is_compressed;
+      uint32_t len = htonl(msg->len);
+      memcpy(buf + seek, &len, 4);
+      seek += 4;
+      ezstream->is_trunc = 1;
+      ezstream->trunc_seek = 0;
+      continue;
+    }
+    break;
+  } 
+exit:
+  atlog("read done\n");
+ // *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
+  return seek;
+}
+
+#if 0
+static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
                                          i32 stream_id, u8 *buf, size_t length,
                                          u32 *data_flags,
                                          nghttp2_data_source *source,
@@ -558,7 +626,7 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
   return 0;
   */
 }
-
+#endif
 
 
 
@@ -637,6 +705,9 @@ static int on_begin_headers_callback(nghttp2_session *session,
   ezstream->recv_data = malloc(EZWINDOW_SIZE);
 
   list_pushf(&ezsession->list_streams, ezstream);
+  ezstream->is_trunc = 0;
+  ezstream->trunc_seek = 0;
+  list_init(&ezstream->queue_omessages);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id ,ezstream);
   //ezsession->nb_open_streams++;
 
@@ -1197,6 +1268,7 @@ static int session_create(
   }
   /*  all seems to be successful. set the following */
   list_init(&ezsession->list_streams);
+#if 0
 #ifdef _WIN32
   if (_pipe(ezsession->pfd, EZPIPE_SIZE, O_BINARY) != 0) {
     perror("pipe");
@@ -1217,6 +1289,7 @@ static int session_create(
     return 1;
   }
   makenonblock(ezsession->pfd[0]);
+#endif
 #endif
   uuid_t uuid;
   uuid_generate_random(uuid);
@@ -1563,8 +1636,30 @@ int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t 
 
 
 
+int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t list_messages) {
+  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+  if (ezsession == NULL) {
+    return 1;
+  }
+  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
+  if (ezstream == NULL) {
+    /* stream doesn't exists */
+    return 2;
+  }
+
+  list_pushf_list(&ezstream->queue_omessages, &list_messages);
 
 
+  nghttp2_data_provider2 data_provider;
+  data_provider.source.ptr = ezstream;
+  data_provider.read_callback = data_source_read_callback2;
+  nghttp2_submit_data2(ezsession->ngsession, 0, stream_id, &data_provider);
+  nghttp2_session_send(ezsession->ngsession);
+  return 0;
+}
+
+
+#if 0
 
 int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t *list_messages) {
 
@@ -1611,6 +1706,7 @@ int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_S
 }
 
 
+#endif
 
 
 
@@ -1621,8 +1717,7 @@ int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_S
 
 
 
-
-
+#if 0
 int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, u8 *data, size_t len) {
   ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
@@ -1656,7 +1751,7 @@ int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_
   nghttp2_session_send(ezsession->ngsession);
   return 0;
 }
-
+#endif
 
 
 

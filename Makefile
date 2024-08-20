@@ -41,6 +41,7 @@ clean :
 test:
 	./tests/test_listc.bin
 	./tests/test_pthpoolc.bin
+	./tests/test_ezgrpc2c.bin
 
 push:
 	git add . && git commit -S && cat ~/kmnyoshie | \
