@@ -14,13 +14,14 @@ ifeq ($(HAVE_SECCOMP),1)
   CFLAGS += -DHAVE_SECCOMP
 endif
 
+ifeq ($(DEBUG),1)
+  LDFLAGS += -fsanitize=address
+  CFLAGS += -fsanitize=address
+endif
 
-LDFLAGS += -fsanitize=address
-
-
-CFLAGS += -I. -ggdb3 -fsanitize=address
+CFLAGS += -I. -ggdb3
 CFLAGS += -Wall
-#CFLAGS += -Wextra
+CFLAGS += -Wextra
 
 tests = tests/test_listc.bin
 tests += tests/test_pthpoolc.bin

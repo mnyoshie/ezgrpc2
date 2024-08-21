@@ -181,6 +181,7 @@ void ezgrpc2_server_destroy(
  * A sucessful return value may mean:
  *
  *   1 The message was sent.
+ *
  *   2 The message is queued and pending, possible cause is
  *     when the client HTTP2 window is full.
  *
