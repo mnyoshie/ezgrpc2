@@ -9,6 +9,12 @@ ifeq ($(OS),Windows_NT)
 	LDFLAGS += -lWs2_32
 endif
 
+ifeq ($(HAVE_SECCOMP),1)
+  LDFLAGS += -lseccomp
+  CFLAGS += -DHAVE_SECCOMP
+endif
+
+
 LDFLAGS += -fsanitize=address
 
 

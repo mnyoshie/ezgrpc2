@@ -11,6 +11,10 @@
 #include <unistd.h>
 #include <assert.h>
 
+#ifdef HAVE_SECCOMP
+#include <seccomp.h>
+#endif
+
 #include "ezgrpc2.h"
 #include "pthpool.h"
 
@@ -124,17 +128,6 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
     path_userdata = paths[i].userdata;
     while ((event = list_popb(&paths[i].list_events)) != NULL) {
       switch(event->type) {
-#if 0
-        case EZGRPC2_EVENT_HEADER: {
-          ezgrpc2_header_t *header;
-          while ((header = list_popb(&event->header.list_headers)) != NULL) {
-            free(header->name);
-            free(header->value);
-            free(header);
-          }
-          printf("event header\n");
-        }  break;
-#endif
         case EZGRPC2_EVENT_MESSAGE:
           printf("event message %zu end stream %d\n",
               list_count(&event->message.list_messages), event->message.end_stream);
@@ -239,7 +232,7 @@ static void handle_thread_pool(ezgrpc2_server_t *server, pthpool_t *pool) {
        break;
      case 2:
        /* possibly the client sent a rst stream */
-       printf("stream id doesn't exists\n");
+       printf("stream id doesn't exists %d\n", data->stream_id);
        /* free */
        free_list_messages(&data->list_omessages);
        break;
@@ -262,6 +255,10 @@ static void handle_thread_pool(ezgrpc2_server_t *server, pthpool_t *pool) {
 
 
 int main() {
+  int res;
+  const size_t nb_paths = 2;
+  ezgrpc2_path_t paths[nb_paths];
+  struct path_userdata_t path_userdata[nb_paths];
 #ifdef __unix__
   /* In a real application, user must configure the server
    * to handle SIGTERM, and make sure to prevent these
@@ -272,6 +269,31 @@ int main() {
    */
   signal(SIGPIPE, SIG_IGN);
 #endif
+
+
+
+
+#ifdef HAVE_SECCOMP
+#define BLACKLIST(ctx, name)                                                   \
+  do {                                                                         \
+    if ((res = seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(name), 0))) {     \
+      fprintf(stderr, "seccomp error %d\n", res);                              \
+      goto seccomp_fail;                                                       \
+    }                                                                          \
+  } while (0)
+  /* Fancy security to prevent shell executions.
+   * Maybe trap them and kill the server gracefully.*/
+  scmp_filter_ctx seccomp_ctx = seccomp_init(SCMP_ACT_ALLOW);
+  assert(seccomp_ctx != 0);
+  BLACKLIST(seccomp_ctx, execve);
+  BLACKLIST(seccomp_ctx, fork);
+  //BLACKLIST(seccomp_ctx, seccomp);
+  seccomp_load(seccomp_ctx);
+#endif
+
+
+
+
 
   /* Tasks for unary requests (single message with end stream) */
   pthpool_t *unordered_pool = NULL;
@@ -287,7 +309,7 @@ int main() {
   ordered_pool = pthpool_init(1, -1);
   assert(ordered_pool != NULL);
   //ezgrpc2_server_t *server = ezgrpc2_server_init("127.0.0.1", 19009, NULL, -1, 16);
-  ezgrpc2_server_t *server = ezgrpc2_server_init(NULL, -1, "::", 19009, 16);
+  ezgrpc2_server_t *server = ezgrpc2_server_init("0.0.0.0", 19009, "::", 19009, 16);
   assert(server != NULL);
 
 
@@ -295,13 +317,10 @@ int main() {
   | What services do we provide? |
   `-----------------------------*/
 
-  const size_t nb_paths = 2;
-  ezgrpc2_path_t paths[nb_paths];
   paths[0].path = "/test.yourAPI/whatever_service1";
   paths[1].path = "/test.yourAPI/whatever_service2";
   list_init(&paths[0].list_events);
   list_init(&paths[1].list_events);
-  struct path_userdata_t path_userdata[nb_paths];
   /* we expect to receive one or more grpc message in a
    * single stream.
    * */
@@ -341,7 +360,6 @@ int main() {
   //    4. Send the results. (give the result to the client)
 
 
-  int res;
   while (1) {
     int is_pool_empty = pthpool_is_empty(unordered_pool) &&
                         pthpool_is_empty(ordered_pool);
@@ -382,5 +400,10 @@ int main() {
   ezgrpc2_server_destroy(server);
   pthpool_destroy(ordered_pool);
   pthpool_destroy(unordered_pool);
+
+#ifdef HAVE_SECCOMP
+  seccomp_release(seccomp_ctx);
+seccomp_fail:
+#endif
   return res;
 }

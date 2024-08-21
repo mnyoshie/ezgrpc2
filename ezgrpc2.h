@@ -78,6 +78,7 @@ struct ezgrpc2_stream_t;
 
 typedef struct ezgrpc2_header_t ezgrpc2_header_t;
 struct ezgrpc2_header_t {
+  size_t nlen, vlen;
   char *name, *value;
 };
 
@@ -211,24 +212,42 @@ int ezgrpc2_session_end_session(
   i32 last_stream_id,
   ezgrpc2_status_code_t status);
 
+#if 0
 /* list of ezgrpc2_header_t */
 list_t ezgrpc2_session_get_headers(
   ezgrpc2_server_t *ezserver,
   char session_id[EZGRPC2_SESSION_UUID_LEN],
   i32 stream_id);
+#endif
 
-/* returns the value for the header `name`. */
-/* returns NULL if it doesn't exists
- * (or memory allocation failed (unlikely)).
+/* Finds the associated header value for the header `name`.
  *
- * The address returned is a nul terminated string
- * pointing to a dynamically allocated memory and must
- * be freed after use.
+ * Example
+ *
+ *   ezgrpc2_header_t ezheader = {.name = "content-type", .nlen = 12};
+ *   if (!ezgrpc2_session_find_header(ezserver, session_uuid, stream_id, &ezheader))
+ *     printf("Found value %.*s\n", ezheader.vlen, ezheader.value);
+ *
+ * If name is found, ezheader.value is initialized.
+ *
+ * The address in ezheader.value is owned by the library. It must not
+ * be freed or modified. User should make a copy of this value if required.
+ *
+ * Returns
+ *
+ *   0 If header name is found.
+ *
+ *   1 If the session doesn't exists
+ *
+ *   2 If the stream_id doesn't exists
+ *
+ *   3 If header name is not found
  * */
-char *ezgrpc2_session_find_header(
+int ezgrpc2_session_find_header(
   ezgrpc2_server_t *ezserver,
-  char session_id[EZGRPC2_SESSION_UUID_LEN],
-  char *name);
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  i32 stream_id,
+  ezgrpc2_header_t *ezheader);
 
 #ifdef __cplusplus
 }

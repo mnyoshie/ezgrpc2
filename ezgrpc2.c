@@ -114,7 +114,7 @@ _Static_assert(EZPIPE_SIZE > EZSEGMENT_SIZE, "environment is insane");
 //#define atlog(fmt, ...) ezlog("@ %s: " fmt, __func__, ##__VA_ARGS__)
 #define atlog(fmt, ...) (void)0
 
-#define EZENABLE_DEBUG
+//#define EZENABLE_DEBUG
 #define ezlogm(...) \
   ezlogf(ezsession, __FILE__, __LINE__, __VA_ARGS__)
 
@@ -136,6 +136,7 @@ struct ezgrpc2_stream_t {
   /* the time the stream is received by the server in
    * unix epoch */
   u64 time;
+  list_t list_headers;
 
   i8 is_method_post : 1;
   i8 is_scheme_http : 1;
@@ -328,6 +329,30 @@ void ezdump(void *vdata, size_t len) {
   assert(len == cur);
 }
 
+
+static ezgrpc2_header_t *header_create(const u8 *name, size_t nlen, const u8 *value, size_t vlen) {
+  ezgrpc2_header_t *ezheader = malloc(sizeof(*ezheader));
+  if (ezheader == NULL)
+    return NULL;
+
+  ezheader->name = malloc(nlen);
+  ezheader->value = malloc(vlen);
+
+  memcpy(ezheader->name, name, nlen);
+  memcpy(ezheader->value, value, vlen);
+  ezheader->nlen = nlen;
+  ezheader->vlen = vlen;
+
+  return ezheader;
+}
+
+static void header_free(ezgrpc2_header_t *ezheader) {
+  free(ezheader->name);
+  free(ezheader->value);
+}
+
+
+
 static i8 *ezgetdt() {
   static i8 buf[32] = {0};
   time_t t = time(NULL);
@@ -337,6 +362,11 @@ static i8 *ezgetdt() {
            stm.tm_min, stm.tm_sec);
   return buf;
 }
+
+
+
+
+
 
 static void ezlogf(ezgrpc2_session_t *ezsession, i8 *file, int line, i8 *fmt,
                    ...) {
@@ -486,6 +516,13 @@ static size_t parse_grpc_message(void *data, size_t len, list_t *list_messages) 
 static int list_cmp_ezstream_id(void *data, void *userdata) {
   return ((ezgrpc2_stream_t*)data)->stream_id == *(i32*)userdata;
 }
+static int list_cmp_ezheader_name(void *data, void *userdata) {
+  ezgrpc2_header_t *a = data;
+  ezgrpc2_header_t *b = userdata;
+  return (a->nlen == b->nlen &&
+      !memcmp(a->name, b->name,
+        a->nlen & b->nlen));
+}
 #if 0
 /* traverses the linked list */
 static ezgrpc_stream_t *ezget_stream(ezgrpc_stream_t *stream, u32 id) {
@@ -501,6 +538,11 @@ static ezgrpc_stream_t *ezget_stream(ezgrpc_stream_t *stream, u32 id) {
 /* only frees what is passed. it does not free all the linked lists */
 static void stream_free(ezgrpc2_stream_t *ezstream) {
   atlog("stream %d freed\n", ezstream->stream_id);
+  ezgrpc2_header_t *ezheader;
+
+  while ((ezheader = list_popb(&ezstream->list_headers)) != NULL) {
+    header_free(ezheader);
+  }
   free(ezstream->recv_data);
   free(ezstream);
 }
@@ -511,6 +553,10 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
                                          nghttp2_data_source *source,
                                          void *user_data) {
   atlog("called\n");
+  if (buf_len < 5) {
+    atlog(COLSTR("buf_len < 5\n", BHRED));
+    return NGHTTP2_INTERNAL_ERROR;
+  }
 //  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
 //  assert(ezstream != NULL);
   ezgrpc2_stream_t *ezstream = source->ptr;
@@ -522,7 +568,7 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
   while (1) {
     if ((msg = list_peekb(list_messages)) == NULL) {
       *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-      return seek;
+      goto exit;
     }
     size_t rem;
     if (ezstream->is_trunc) {
@@ -652,6 +698,13 @@ static nghttp2_ssize ngsend_callback(nghttp2_session *session, const u8 *data,
   return ret;
 }
 
+
+
+
+
+
+
+
 static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t length,
                                int flags, void *user_data) {
   ezgrpc2_session_t *ezsession = user_data;
@@ -686,6 +739,12 @@ static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t l
   return ret;
 }
 
+
+
+
+
+
+
 /* we're beginning to receive a header; open up a memory for the new stream */
 static int on_begin_headers_callback(nghttp2_session *session,
                                      const nghttp2_frame *frame,
@@ -699,6 +758,9 @@ static int on_begin_headers_callback(nghttp2_session *session,
   ezgrpc2_stream_t *ezstream = calloc(1, sizeof(*ezstream));
   if (ezstream == NULL) return NGHTTP2_ERR_CALLBACK_FAILURE;
 
+  list_init(&ezstream->queue_omessages);
+  list_init(&ezstream->list_headers);
+
   ezstream->time = (uint64_t)time(NULL);
   ezstream->stream_id = frame->hd.stream_id;
   ezstream->recv_len = 0;
@@ -707,12 +769,19 @@ static int on_begin_headers_callback(nghttp2_session *session,
   list_pushf(&ezsession->list_streams, ezstream);
   ezstream->is_trunc = 0;
   ezstream->trunc_seek = 0;
-  list_init(&ezstream->queue_omessages);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id ,ezstream);
   //ezsession->nb_open_streams++;
 
   return 0;
 }
+
+
+
+
+
+
+
+
 
 /* ok, here's the header name and value. this will be called from time to time
  */
@@ -724,6 +793,10 @@ static int on_header_callback(nghttp2_session *session,
   (void)flags;
   ezgrpc2_session_t *ezsession = user_data;
   ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, frame->hd.stream_id);
+
+  ezgrpc2_header_t *ezheader = header_create(name, namelen, value, valuelen);
+  assert(ezheader != NULL);
+  list_pushf(&ezstream->list_headers, ezheader);
 
   i8 *method = ":method";
   i8 *scheme = ":scheme";
@@ -1019,6 +1092,14 @@ static int on_frame_recv_callback(nghttp2_session *session,
   }
   return 0;
 }
+
+
+
+
+
+
+
+
 
 static int on_data_chunk_recv_callback(nghttp2_session *session, u8 flags,
                                        i32 stream_id, const u8 *data,
@@ -1396,7 +1477,8 @@ static int session_events(ezgrpc2_session_t *ezsession) {
 | API FUNCTIONS: You will only have to care about these |
 `------------------------------------------------------*/
 
-void ezgrpc2_server_destroy(ezgrpc2_server_t *s) {
+void ezgrpc2_server_destroy(
+  ezgrpc2_server_t *s) {
   for (EZNFDS i = 0; i < 2; i++)
   {
     if (s->fds[i].fd != -1) {
@@ -1428,7 +1510,10 @@ void ezgrpc2_server_destroy(ezgrpc2_server_t *s) {
 
 
 
-ezgrpc2_server_t *ezgrpc2_server_init(const char *ipv4_addr, u16 ipv4_port, const char *ipv6_addr, u16 ipv6_port, int backlog) {
+ezgrpc2_server_t *ezgrpc2_server_init(
+  const char *ipv4_addr, u16 ipv4_port,
+  const char *ipv6_addr, u16 ipv6_port,
+  int backlog) {
   struct sockaddr_in ipv4_saddr = {0};
   struct sockaddr_in6 ipv6_saddr = {0};
   ezgrpc2_server_t *server = NULL;
@@ -1590,7 +1675,11 @@ err:
 
 
 
-int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t nb_paths, int timeout) {
+int ezgrpc2_server_poll(
+  ezgrpc2_server_t *server,
+  ezgrpc2_path_t *paths,
+  size_t nb_paths,
+  int timeout) {
   struct pollfd *fds = server->fds;
   const EZNFDS nb_fds = server->nb_fds;
 
@@ -1636,7 +1725,14 @@ int ezgrpc2_server_poll(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t 
 
 
 
-int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t list_messages) {
+
+
+
+int ezgrpc2_session_send(
+  ezgrpc2_server_t *ezserver,
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  i32 stream_id,
+  list_t list_messages) {
   ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     return 1;
@@ -1659,54 +1755,6 @@ int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_S
 }
 
 
-#if 0
-
-int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, list_t *list_messages) {
-
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
-  if (ezsession == NULL) {
-    return 1;
-  }
-
-  assert(list_messages != NULL);
-
-  nghttp2_data_provider2 data_provider;
-  data_provider.source.fd = ezsession->pfd[0];
-  data_provider.read_callback = data_source_read_callback2;
-
-  size_t size = 0;
-  EZSSIZE l, segment_size = EZSEGMENT_SIZE;
-  ezgrpc2_message_t *msg;
-  while ((msg = list_popb(list_messages)) != NULL) {
-    assert(1 + 4 + msg->len < segment_size);
-    if (size + 1 + 4 + msg->len > segment_size) {
-      nghttp2_submit_data2(ezsession->ngsession, 0, stream_id, &data_provider);
-      if (!nghttp2_session_want_write(ezsession->ngsession)) {
-        atlog(COLSTR("nghttp2: don't want to write\n", BHRED));
-        return 1;
-      }
-      nghttp2_session_send(ezsession->ngsession);
-      size = 0;
-    }
-
-    l = write(ezsession->pfd[1], &msg->is_compressed, 1);
-    assert(l == 1);
-    l = write(ezsession->pfd[1], &(u32){htonl(msg->len)}, 4);
-    assert(l == 4);
-    l = write(ezsession->pfd[1], msg->data, msg->len);
-    assert(l == msg->len);
-    size += 1 + 4 + msg->len;
-    free(msg->data);
-    free(msg);
-  }
-
-  nghttp2_submit_data2(ezsession->ngsession, 0, stream_id, &data_provider);
-  nghttp2_session_send(ezsession->ngsession);
-  return 0;
-}
-
-
-#endif
 
 
 
@@ -1716,51 +1764,11 @@ int ezgrpc2_session_send(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_S
 
 
 
-
-#if 0
-int ezgrpc2_session_send2(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, u8 *data, size_t len) {
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
-  if (ezsession == NULL) {
-    /* session doesn't exists */
-    return 1;
-  }
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
-  if (ezstream == NULL) {
-    /* streqm doesn't exists */
-    return 2;
-  }
-
-  nghttp2_data_provider2 data_provider;
-  data_provider.source.fd = ezsession->pfd[0];
-  data_provider.read_callback = data_source_read_callback2;
-
-
-  const EZSSIZE segment_size = EZSEGMENT_SIZE;
-  EZSSIZE l;
-  while (len > segment_size) {
-    l = write(ezsession->pfd[1], data, segment_size);
-    assert(l == segment_size);
-    data += segment_size;
-    len -= segment_size;
-    nghttp2_submit_data2(ezsession->ngsession, 0, stream_id, &data_provider);
-    nghttp2_session_send(ezsession->ngsession);
-  }
-  l = write(ezsession->pfd[1], data, len);
-  assert(l == len);
-  nghttp2_submit_data2(ezsession->ngsession, 0, stream_id, &data_provider);
-  nghttp2_session_send(ezsession->ngsession);
-  return 0;
-}
-#endif
-
-
-
-
-
-
-
-
-int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 stream_id, int status) {
+int ezgrpc2_session_end_stream(
+  ezgrpc2_server_t *ezserver,
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  i32 stream_id,
+  int status) {
   ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     return 1;
@@ -1784,7 +1792,20 @@ int ezgrpc2_session_end_stream(ezgrpc2_server_t *ezserver, char session_uuid[EZG
   return 0;
 }
 
-int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, char session_uuid[EZGRPC2_SESSION_UUID_LEN], i32 last_stream_id, int error_code) {
+
+
+
+
+
+
+
+
+
+int ezgrpc2_session_end_session(
+  ezgrpc2_server_t *ezserver,
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  i32 last_stream_id,
+  int error_code) {
   ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     /* session doesn't exists */
@@ -1797,3 +1818,26 @@ int ezgrpc2_session_end_session(ezgrpc2_server_t *ezserver, char session_uuid[EZ
   memset(ezsession->session_id, 0, 32);
   return 0;
 }
+
+int ezgrpc2_session_find_header(
+  ezgrpc2_server_t *ezserver,
+  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  i32 stream_id, ezgrpc2_header_t *ezheader) {
+  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+  if (ezsession == NULL) {
+    return 1;
+  }
+
+  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
+  if (ezstream == NULL)
+    return 2;
+
+  ezgrpc2_header_t *found;
+  if ((found = list_find(&ezstream->list_headers, list_cmp_ezheader_name, ezheader))
+      == NULL)
+    return 3;
+
+
+  return ezheader->value = found->value, ezheader->vlen = found->vlen, 0;
+}
+  
