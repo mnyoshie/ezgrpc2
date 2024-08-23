@@ -15,7 +15,7 @@ To be determine.
 
 # Architecture
 
-This arhitecture was inspired by `poll(2)`, but instead of polling fds and returning events
+This architecture was inspired by `poll(2)`, but instead of polling fds and returning events
 such as POLLIN, you poll a lists of paths and it gives events of `EVENT_MESSAGE`,
 `EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids.
 
