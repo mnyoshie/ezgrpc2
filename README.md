@@ -47,6 +47,9 @@ int main() {
    * the messages must be ordered and hence can't be parallelize */
   pthpool_t *ordered_pool = NULL;
 
+  /* be careful not to increase the workers too much or they might start
+   * fighting.
+   */
   unordered_pool = pthpool_init(2, -1);
   assert(unordered_pool != NULL);
 

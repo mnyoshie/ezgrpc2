@@ -45,7 +45,7 @@ static void *pthpool_worker(void *arg) {
 
   while (1) {
     force_assert(!pthread_mutex_lock(&pool->mutex));
-    task_t *task;
+    task_t *task = NULL;
     while (!pool->stop && (task = list_popb(&pool->queue)) == NULL)
       pthread_cond_wait(&pool->wcond, &pool->mutex);
     if (pool->stop) {
