@@ -21,7 +21,7 @@ endif
 
 CFLAGS += -I. -ggdb3
 CFLAGS += -Wall
-CFLAGS += -Wextra
+#CFLAGS += -Wextra
 
 tests = tests/test_listc.bin
 tests += tests/test_pthpoolc.bin

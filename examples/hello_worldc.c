@@ -129,7 +129,7 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
     while ((event = list_popb(&paths[i].list_events)) != NULL) {
       switch(event->type) {
         case EZGRPC2_EVENT_MESSAGE:
-          printf("event message %zu end stream %d\n",
+          printf("id %d, event message %zu end stream %d\n", event->message.stream_id,
               list_count(&event->message.list_messages), event->message.end_stream);
 
           if (path_userdata->is_unary) {
@@ -159,7 +159,7 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
 #endif
           break;
         case EZGRPC2_EVENT_DATALOSS:
-          printf("event dataloss\n");
+          printf("id %d, event dataloss\n", event->dataloss.stream_id);
           /* Client ended the stream with a truncated gRPC message.
            *
            * If previously, we got a EZGRPC2_EVENT_MESSAGE in this stream id,

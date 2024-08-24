@@ -1031,27 +1031,28 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     memcpy(event->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
 
     event->message.list_messages = list_messages;
-    event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
     event->message.stream_id = frame->hd.stream_id;
 
-    list_pushf(&ezstream->path->list_events, event);
     memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
     ezstream->recv_len -= lseek;
-  }
-  /* we've receaived an end stream but last message is truncated */
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
-    atlog("event dataloss %zu\n", list_count(&list_messages));
-    ezgrpc2_event_t *event = malloc(sizeof(*event));
-    event->type = EZGRPC2_EVENT_DATALOSS;
-    memcpy(event->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
-
-    event->dataloss.stream_id = ezstream->stream_id;
-
     list_pushf(&ezstream->path->list_events, event);
+    if (ezstream->recv_len != 0 && frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+      /* we've receaived an end stream but last message is truncated */
+      event->message.end_stream = 0;
+      atlog("event dataloss %zu\n", list_count(&list_messages));
+      ezgrpc2_event_t *devent = malloc(sizeof(*event));
+      devent->type = EZGRPC2_EVENT_DATALOSS;
+      memcpy(devent->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
+  
+      devent->dataloss.stream_id = ezstream->stream_id;
+  
+      list_pushf(&ezstream->path->list_events, devent);
+    }
+    else
+      event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
   }
 
   return 0;
-
 }
 
 
@@ -1349,29 +1350,6 @@ static int session_create(
   }
   /*  all seems to be successful. set the following */
   list_init(&ezsession->list_streams);
-#if 0
-#ifdef _WIN32
-  if (_pipe(ezsession->pfd, EZPIPE_SIZE, O_BINARY) != 0) {
-    perror("pipe");
-    return 1;
-  }
-#else
-  if (pipe(ezsession->pfd) < 0) {
-    perror("pipe");
-    return 1;
-  }
-  int psize;
-  if ((psize = fcntl(ezsession->pfd[1], F_GETPIPE_SZ, 0)) < 0) {
-    perror("fcntl");
-    return 1;
-  }
-  if (psize < 16 * 1024 && fcntl(ezsession->pfd[1], F_SETPIPE_SZ, EZPIPE_SIZE) < 0) {
-    perror("fcntl");
-    return 1;
-  }
-  makenonblock(ezsession->pfd[0]);
-#endif
-#endif
   uuid_t uuid;
   uuid_generate_random(uuid);
   uuid_unparse_lower(uuid, ezsession->session_uuid);
@@ -1787,6 +1765,10 @@ int ezgrpc2_session_end_stream(
        strlen(grpc_message)},
   };
   atlog("trailer submitted\n");
+  if (!list_is_empty(&ezstream->queue_omessages)) {
+    atlog(COLSTR("messages are still queued\n", BHRED));
+
+  }
   nghttp2_submit_trailer(ezsession->ngsession, stream_id, trailers, 2);
   nghttp2_session_send(ezsession->ngsession);
   return 0;
