@@ -1021,11 +1021,12 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     return 0;
   }
 
+  ezgrpc2_event_t *event = NULL;
   size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, &list_messages);
   if (lseek != 0) {
     assert(lseek <= ezstream->recv_len);
     atlog("event message %zu\n", list_count(&list_messages));
-    ezgrpc2_event_t *event = malloc(sizeof(*event));
+    event = malloc(sizeof(*event));
     event->type = EZGRPC2_EVENT_MESSAGE;
     //event->ezsession = ezsession;
     memcpy(event->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
@@ -1035,23 +1036,21 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
 
     memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
     ezstream->recv_len -= lseek;
+    event->message.end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0;
     list_pushf(&ezstream->path->list_events, event);
-    if (ezstream->recv_len != 0 && frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-      /* we've receaived an end stream but last message is truncated */
-      event->message.end_stream = 0;
-      atlog("event dataloss %zu\n", list_count(&list_messages));
-      ezgrpc2_event_t *devent = malloc(sizeof(*event));
-      devent->type = EZGRPC2_EVENT_DATALOSS;
-      memcpy(devent->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
-  
-      devent->dataloss.stream_id = ezstream->stream_id;
-  
-      list_pushf(&ezstream->path->list_events, devent);
-    }
-    else
-      event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
   }
-
+  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
+    /* we've receaived an end stream but last message is truncated */
+    atlog("event dataloss %zu\n", list_count(&list_messages));
+    ezgrpc2_event_t *devent = malloc(sizeof(*event));
+    devent->type = EZGRPC2_EVENT_DATALOSS;
+    memcpy(devent->session_uuid, ezsession->session_uuid, sizeof(ezsession->session_uuid));
+  
+    devent->dataloss.stream_id = ezstream->stream_id;
+  
+    list_pushf(&ezstream->path->list_events, devent);
+    //event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
+  }
   return 0;
 }
 
