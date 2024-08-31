@@ -564,7 +564,7 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
   ezgrpc2_message_t *msg;
 
 
-  size_t seek = 0;
+  size_t buf_seek = 0;
   while (1) {
     if ((msg = list_peekb(list_messages)) == NULL) {
       *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
@@ -572,8 +572,8 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
     }
     size_t rem;
     if (ezstream->is_trunc) {
-      assert(buf_len >= seek);
-      if ((rem = buf_len - seek) == 0) {
+      assert(buf_len >= buf_seek);
+      if ((rem = buf_len - buf_seek) == 0) {
         /* buf is fully written */
         goto exit;
       }
@@ -581,8 +581,8 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
       char is_fit = msg->len - ezstream->trunc_seek <= rem;
       size_t to_write = is_fit ? msg->len - ezstream->trunc_seek :
         rem;
-      memcpy(buf + seek, msg->data + ezstream->trunc_seek, to_write);
-      seek += to_write;
+      memcpy(buf + buf_seek, msg->data + ezstream->trunc_seek, to_write);
+      buf_seek += to_write;
 
       if (is_fit) {
       /* the whole message can fit! */
@@ -597,11 +597,11 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
       }
     }
     /* if we can fit 5 bytes or more to the buffer */
-    if (seek + 5 <= buf_len)  {
-      buf[seek++] = msg->is_compressed;
+    if (buf_seek + 5 <= buf_len)  {
+      buf[buf_seek++] = msg->is_compressed;
       uint32_t len = htonl(msg->len);
-      memcpy(buf + seek, &len, 4);
-      seek += 4;
+      memcpy(buf + buf_seek, &len, 4);
+      buf_seek += 4;
       ezstream->is_trunc = 1;
       ezstream->trunc_seek = 0;
       continue;
@@ -611,7 +611,7 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
 exit:
   atlog("read done\n");
  // *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-  return seek;
+  return buf_seek;
 }
 
 #if 0
