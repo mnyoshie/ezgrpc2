@@ -3,27 +3,171 @@
 #include <stdlib.h>
 
 
-typedef struct listb_t listb_t;
-struct listb_t;
-
 typedef struct list_t list_t;
 struct list_t {
-  listb_t *head, **tail;
+  // opaque type
+  //listb_t *head, **tail;
+  void *head, **tail;
 };
 
-void list_init(list_t *);
-size_t list_count(list_t *);
-int list_pushf(list_t *, void *);
-int list_pushb(list_t *, void *);
-void *list_popb(list_t *);
+/**
+ *   Initializes the list at the address pointed by the parameter ``list``
+ *
+ */
+void list_init(list_t *list);
 
 
-int list_pushf_list(list_t *dst, list_t *src);
+/**
+ *   Counts the number of list at the address pointed by the parameter ``list``
+ *
+ */
+size_t list_count(list_t *list);
+
+/**
+ * Pushes the user defined ``userdata`` to the front of the list ``list``
+ *
+ * :param list: The list
+ * :param userdata: User defined ``userdata``
+ * :returns: * On success, 0
+ *
+ *           * On failure, non-zero
+ */
+int list_pushf(list_t *list, void *userdata);
+
+/**
+ * Pushes the user defined ``userdata`` to the back of the list ``list``
+ *
+ * :param list: The list
+ * :param userdata: User defined ``userdata``
+ * :returns: * On success, 0
+ *
+ *           * On failure, non-zero
+ */
+int list_pushb(list_t *list, void *userdata);
+
+/**
+ * Pops the user defined ``userdata`` from the back of the list, ``list``
+ *
+ * :param list: The list
+ * :param userdata: User defined ``userdata``
+ * :returns: * On success, the user defined ``userdata``
+ *
+ *           * On an empty list, ``NULL``.
+ */
+void *list_popb(list_t *list);
+
+/**
+ * Peeks from the back of the list, ``list``.
+ *
+ * :param list: The list
+ * :param userdata: User defined ``userdata``
+ * :returns: * On success, the user defined, ``userdata``
+ *
+ *           * On an empty list, ``NULL``.
+ */
+void *list_peekb(list_t *list);
+
+
+/**
+ * Appends the list ``src`` to the list ``dst``.
+ *
+ * :param dst: The destination list
+ * :param src: The source list
+ */
+void list_pushf_list(list_t *dst, list_t *src);
 
 void list_print(list_t *);
 
-void *list_find(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata);
-void *list_remove(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata);
-int list_is_empty(list_t *l);
-void *list_peekb(list_t *l);
+/**
+ * Finds user defined, ``userdata``, in the list, ``list`` using the
+ * callback function ``cmp``.
+ *
+ * This function returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
+ * returns 1.
+ *
+ * The implementation of the callback comparison function, ``cmp`` must return 1
+ * in a matching ``userdata``, else 0.
+ *
+ * :param list: The list
+ * :param cmp: The callback comparison function
+ * :param cmpdata: User defined ``cmpdata`` to be passed to the comparison function.
+ * :returns: * On a matching userdata, it returns the matching user defined ``userdata``
+ *
+ *           * Else ``NULL``.
+ *
+ * Example 1:
+ *
+ * .. code-block:: C
+ *
+ *    #include "list.h"
+ *    
+ *    int cmp(void *data, void *cmpdata) {
+ *      return data == userdata;
+ *    }
+ *    
+ *    int main() {
+ *      list_t l;
+ *      list_init(&l);
+ *      list_pushf(&l, (void*)0x1);
+ *      list_pushf(&l, (void*)0x4);
+ *      list_pushf(&l, (void*)0x11);
+ *    
+ *      list_find(&l, cmp, (void*)4); // returns 4
+ *      list_find(&l, cmp, (void*)13); // returns NULL
+ *      return 0;
+ *    }
+ */
+void *list_find(list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *cmpdata);
+
+/**
+ * Finds and removes user defined, ``userdata``, in the list, ``list`` using the
+ * callback function ``cmp``.
+ *
+ * This function returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
+ * returns 1.
+ *
+ * The implementation of the callback comparison function, ``cmp`` must return 1
+ * in a matching ``userdata``, else 0.
+ *
+ * :param list: The list
+ * :param cmp: The callback comparison function
+ * :param cmpdata: User defined ``cmpdata`` to be passed to the comparison function.
+ * :returns: * On a matching userdata, it returns the matching user defined ``userdata``
+ *             and removes it from the list.
+ *
+ *           * Else ``NULL``.
+ *
+ * Example 1:
+ *
+ * .. code-block:: C
+ *
+ *    #include "list.h"
+ *    
+ *    int cmp(void *data, void *cmpdata) {
+ *      return data == userdata;
+ *    }
+ *    
+ *    int main() {
+ *      list_t l;
+ *      list_init(&l);
+ *      list_pushf(&l, (void*)0x1);
+ *      list_pushf(&l, (void*)0x4);
+ *      list_pushf(&l, (void*)0x11);
+ *    
+ *      list_remove(&l, cmp, (void*)4); // returns 4
+ *      list_remove(&l, cmp, (void*)13); // returns NULL
+ *      return 0;
+ *    }
+ */
+void *list_remove(list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *cmpdata);
+
+/**
+ * Checks if the list is empty.
+ *
+ * :returns: * On an empty list, 1
+ *
+ *           * Else, 0
+ */
+int list_is_empty(list_t *list);
+
 #endif

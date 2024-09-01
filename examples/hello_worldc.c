@@ -200,11 +200,12 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
 }
 
 static void handle_thread_pool(ezgrpc2_server_t *server, pthpool_t *pool) {
- list_t list_tasks;
+ list_t list_results;
+ list_init(&list_results);
  /* retrieve any finished tasks */
- pthpool_poll(pool, &list_tasks);
- task_t *task;
- while ((task = list_popb(&list_tasks)) != NULL) {
+ pthpool_poll(pool, &list_results);
+ pthpool_result_t *task;
+ while ((task = list_popb(&list_results)) != NULL) {
    struct userdata_t *data = task->ret;
    if (task->is_timeout) {
      assert(task->ret == NULL);
@@ -302,11 +303,11 @@ int main() {
    * the messages must be ordered and hence can't be parallelize */
   pthpool_t *ordered_pool = NULL;
 
-  unordered_pool = pthpool_init(2, -1);
+  unordered_pool = pthpool_init(2, 0);
   assert(unordered_pool != NULL);
 
   /* worker must be one for an ordered execution */
-  ordered_pool = pthpool_init(1, -1);
+  ordered_pool = pthpool_init(1, 0);
   assert(ordered_pool != NULL);
   //ezgrpc2_server_t *server = ezgrpc2_server_init("127.0.0.1", 19009, NULL, -1, 16);
   ezgrpc2_server_t *server = ezgrpc2_server_init("0.0.0.0", 19009, "::", 19009, 16);

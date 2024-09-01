@@ -1,5 +1,6 @@
 #include "list.h"
 
+typedef struct listb_t listb_t;
 struct listb_t {
   void *data;
   listb_t *next;
@@ -13,7 +14,7 @@ void list_init(list_t *l) {
 
 size_t list_count(list_t *l) {
   size_t c = 0;
-  for (listb_t **b = &l->head; *b != NULL; b = &(*b)->next)
+  for (listb_t **b = (listb_t**)&l->head; *b != NULL; b = &(*b)->next)
     c++;
 
   return c;
@@ -24,7 +25,7 @@ int list_is_empty(list_t *l) {
 }
 
 void *list_find(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata) {
-  for (listb_t **b = &l->head; *b != NULL; b = &(*b)->next) {
+  for (listb_t **b = (listb_t**)&l->head; *b != NULL; b = &(*b)->next) {
     if (cmp((*b)->data, userdata))
       return (*b)->data;
   }
@@ -33,7 +34,7 @@ void *list_find(list_t *l, int (*cmp)(void *data, void *userdata), void *userdat
 
 /* remove */
 void *list_remove(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata) {
-  listb_t **b = &l->head;
+  listb_t **b = (listb_t**)&l->head;
 
   while (*b != NULL && !cmp((*b)->data, userdata))
     b = &(*b)->next;
@@ -59,8 +60,8 @@ int list_pushf(list_t *l, void *data){
   b->data = data;
   b->next = NULL;
 
-  *(l->tail) = b;
-  l->tail = &b->next;
+  *((listb_t**)l->tail) = b;
+  l->tail = (listb_t**)&b->next;
   return 0;
 }
 
@@ -83,7 +84,7 @@ void *list_popb(list_t *l) {
   }
 
   listb_t *b = l->head;
-  l->head = l->head->next;
+  l->head = ((listb_t*)l->head)->next;
   if (l->head == NULL)
     l->tail = &l->head;
 
@@ -97,22 +98,20 @@ void *list_peekb(list_t *l) {
   if (l->head == NULL)
     return NULL;
 
-  return l->head->data;
+  return ((listb_t*)l->head)->data;
 }
 
-int list_pushf_list(list_t *dst, list_t *src) {
+void list_pushf_list(list_t *dst, list_t *src) {
   if (dst->head == NULL)
     dst->head = src->head;
-  *dst->tail = src->head;
+  *(listb_t**)dst->tail = src->head;
   dst->tail = src->tail;
   list_init(src);
-  return 0;
-
 }
 
 
 void list_print(list_t *l) {
-  for (listb_t **p = &l->head; *p != NULL; p = &(*p)->next) {
+  for (listb_t **p = (listb_t**)&l->head; *p != NULL; p = &(*p)->next) {
     printf("%p\n",  (*p)->data);
   }
 }

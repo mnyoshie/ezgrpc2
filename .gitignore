@@ -5,3 +5,5 @@ a.out
 core
 test*.c
 *.swp
+
+docs/build

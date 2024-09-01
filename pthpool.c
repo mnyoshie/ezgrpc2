@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+
+typedef struct pthpool_result_t task_t;
 #include "pthpool.h"
 
 #define force_assert(s)                                                        \
@@ -170,7 +172,8 @@ unlock:
 void pthpool_poll(pthpool_t *pool, list_t *l) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
 
-  *l = pool->finished;
+  //*l = pool->finished;
+  list_pushf_list(l, &pool->finished);
   list_init(&pool->finished);
   //pool->nb_finished = 0;
 

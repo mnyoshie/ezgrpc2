@@ -32,6 +32,9 @@ typedef uint32_t u32;
 typedef int64_t i64;
 typedef uint64_t u64;
 
+/**
+ * .. c:enum:: ezgrpc2_status_code_t
+ */
 enum ezgrpc2_status_code_t {
   /* https://github.com/grpc/grpc/tree/master/include/grpcpp/impl/codegen */
   EZGRPC2_STATUS_OK = 0,
@@ -55,6 +58,9 @@ enum ezgrpc2_status_code_t {
 
 typedef enum ezgrpc2_status_code_t ezgrpc2_status_code_t;
 
+/**
+ * .. c:enum:: ezgrpc2_event_type_t
+ */
 enum ezgrpc2_event_type_t {
   /* The client has sent a message/s */
   EZGRPC2_EVENT_MESSAGE,
@@ -76,17 +82,26 @@ struct ezgrpc2_session_t;
 typedef struct ezgrpc2_stream_t ezgrpc2_stream_t;
 struct ezgrpc2_stream_t;
 
+/**
+ * .. c:struct:: ezgrpc2_header_t
+ */
 typedef struct ezgrpc2_header_t ezgrpc2_header_t;
 struct ezgrpc2_header_t {
   size_t nlen, vlen;
   char *name, *value;
 };
 
+/**
+ *
+ */
 typedef struct ezgrpc2_event_cancel_t ezgrpc2_event_cancel_t;
 struct ezgrpc2_event_cancel_t {
   i32 stream_id;
 };
 
+/**
+ *
+ */
 typedef struct ezgrpc2_event_message_t ezgrpc2_event_message_t;
 struct ezgrpc2_event_message_t {
   char end_stream;
@@ -95,6 +110,9 @@ struct ezgrpc2_event_message_t {
   list_t list_messages;
 };
 
+/**
+ *
+ */
 typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;
 struct ezgrpc2_event_dataloss_t {
   /* cast list_popb to ``ezgrpc2_message_t *`` */
@@ -102,6 +120,9 @@ struct ezgrpc2_event_dataloss_t {
   i32 stream_id;
 };
 
+/**
+ *
+ */
 typedef struct ezgrpc2_event_t ezgrpc2_event_t;
 struct ezgrpc2_event_t {
 
@@ -117,6 +138,9 @@ struct ezgrpc2_event_t {
   };
 };
 
+/**
+ * .. c:struct:: ezgrpc2_path_t
+ */
 typedef struct ezgrpc2_path_t ezgrpc2_path_t;
 struct ezgrpc2_path_t {
   char *path;
@@ -135,6 +159,9 @@ struct ezvec_t {
 };
 
 
+/**
+ *
+ */
 typedef struct ezgrpc2_message_t ezgrpc2_message_t;
 struct ezgrpc2_message_t {
   u8 is_compressed;

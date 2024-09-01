@@ -3,7 +3,7 @@ LDFLAGS += -lpthread
 LDFLAGS += -lcrypto
 LDFLAGS += -luuid
 
-.PHONY: push test
+.PHONY: push test html host_html
 
 ifeq ($(OS),Windows_NT)
 	LDFLAGS += -lWs2_32
@@ -50,6 +50,13 @@ test:
 	./tests/test_pthpoolc.bin
 	./tests/test_ezgrpc2c.bin
 
+html:
+	$(MAKE) -C docs html
+
+host_html: html
+	php -t ./docs/build/html/ -S localhost:8080
+
 push:
 	git add . && git commit -S && cat ~/kmnyoshie | \
 		termux-clipboard-set && git push $(f)
+
