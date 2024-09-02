@@ -130,6 +130,7 @@ struct ezgrpc_settingsf_t {
 };
 
 
+typedef struct ezgrpc2_stream_t ezgrpc2_stream_t;
 struct ezgrpc2_stream_t {
   i32 stream_id;
 
@@ -235,7 +236,7 @@ static int ezmemcmp(void *restrict a, void *restrict b, size_t l) {
   return 0;
 }
 
-static i8 *grpc_status2str(ezgrpc2_status_code_t status) {
+static i8 *grpc_status2str(ezgrpc2_status_t status) {
   switch (status) {
     case EZGRPC2_STATUS_OK:
       return "ok";
@@ -520,7 +521,7 @@ static int list_cmp_ezheader_name(void *data, void *userdata) {
   ezgrpc2_header_t *a = data;
   ezgrpc2_header_t *b = userdata;
   return (a->nlen == b->nlen &&
-      !memcmp(a->name, b->name,
+      !strncasecmp(a->name, b->name,
         a->nlen & b->nlen));
 }
 #if 0

@@ -2,11 +2,12 @@
 #define MNLIST_H
 #include <stdlib.h>
 
-
 typedef struct list_t list_t;
+
+/**
+ * An opaque list context
+ */
 struct list_t {
-  // opaque type
-  //listb_t *head, **tail;
   void *head, **tail;
 };
 

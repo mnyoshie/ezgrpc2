@@ -1,6 +1,7 @@
 list documentation
 ==================
 
+.. autocstruct:: list.h::list_t
 .. autocfunction:: list.h::list_init 
 .. autocfunction:: list.h::list_is_empty
 .. autocfunction:: list.h::list_count

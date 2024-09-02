@@ -30,9 +30,10 @@ struct pthpool_t;
  * :param workers: The numbers of threads to be spawned in
  *                 the thread pool
  * :param flags: unused. Must be set to 0.
- * :returns: On success, a pointer to the initialized thread pool.
+ * :returns:
+ *     * On success, a pointer to the initialized thread pool.
  *
- *           On failure, ``NULL``.
+ *     * On failure, ``NULL``.
  *
  * Example:
  *
