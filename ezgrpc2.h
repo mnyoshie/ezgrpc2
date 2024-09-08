@@ -102,7 +102,9 @@ typedef struct ezgrpc2_event_message_t ezgrpc2_event_message_t;
 struct ezgrpc2_event_message_t {
   char end_stream;
   i32 stream_id;
-  /* cast list_popb to ``ezgrpc2_message_t *`` */
+  /* Cast the return of :c:func:`list_popb` to a pointer to
+   * :c:struct:`ezgrpc2_message_t`
+   * */
   list_t list_messages;
 };
 
@@ -124,41 +126,54 @@ struct ezgrpc2_event_t {
   char session_uuid[EZGRPC2_SESSION_UUID_LEN];
   ezgrpc2_event_type_t type;
 
+  /**
+   * Anonymous union
+   */
   union {
+    /**
+     * When :c:member:`ezgrpc2_event_t.type` is :c:enumerator:`EZGRPC2_EVENT_MESSAGE`.
+     */
     ezgrpc2_event_message_t message;
+    /**
+     * When :c:member:`ezgrpc2_event_t.type` is :c:enumerator:`EZGRPC2_EVENT_DATALOSS`.
+     */
     ezgrpc2_event_dataloss_t dataloss;
+    /**
+     * When :c:member:`ezgrpc2_event_t.type` is :c:enumerator:`EZGRPC2_EVENT_CANCEL`.
+     */
     ezgrpc2_event_cancel_t cancel;
   };
 };
 
 /**
- * .. c:struct:: ezgrpc2_path_t
+ * A path to poll. To be passed to :c:func:`ezgrpc2_server_poll()`.
  */
 typedef struct ezgrpc2_path_t ezgrpc2_path_t;
 struct ezgrpc2_path_t {
+  /**
+   * Path to listen to. Must not contain an anchor or query
+   */
   char *path;
+
+  /**
+   * User defined userdata
+   */
   void *userdata;
 
-  /* cast list_popb to ``ezgrpc2_event_t *`` */
-  /* This contains events for this specific path */
   /**
-   * A list of :c:struct:`ezgrpc2_event_t`.
+   * This is a list of :c:struct:`ezgrpc2_event_t` and it
+   * contains events for this specific path.
+   *
+   * Cast the return of :c:func:`list_popb()` to a pointer to :c:struct:`ezgrpc2_event_t` when its argument id ``list_events``
    */
   list_t list_events;
 };
 
-/*
-typedef struct ezvec_t ezvec_t;
-struct ezvec_t {
-  size_t len;
-  u8 *data;
-};*/
 
-
-/**
- *
- */
 typedef struct ezgrpc2_message_t ezgrpc2_message_t;
+/**
+ * A gRPC message
+ */
 struct ezgrpc2_message_t {
   u8 is_compressed;
   u32 len;
@@ -172,7 +187,26 @@ extern "C" {
 #endif
 
 
-
+/**
+ * The :c:func:`ezgrpc2_server_init()` function creates a ezserver context,
+ * binding to the associated ``ipv4_addr`` and ``ipv6_addr`` if it's not
+ * `NULL`.
+ *
+ * At no point ``ipv4_addr`` and ``ipv6_addr`` be ``NULL.``
+ *
+ * :returns:
+ *
+ *     * On success, a pointer to the opaque :c:struct:`ezgrpc2_server_t`
+ *
+ *     * On failure, ``NULL``.
+ *
+ * Example 1:
+ *
+ * .. code-block:: C
+ *
+ *    ezgrpc2_server_t *ezgrpc2_server_init("0.0.0.0", 8080, "::", 8080, 16);
+ *
+ */
 ezgrpc2_server_t *ezgrpc2_server_init(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
@@ -187,11 +221,12 @@ ezgrpc2_server_t *ezgrpc2_server_init(
  * is automatically sent and closes the associated stream. No event is generated.
  *
  * :returns:
+ *
  *    * On an event, a value greater than 0.
  *
  *    * On no event, 0.
  *
- *    * On error, negative value.
+ *    * On error, a negative value.
  *
  * .. note::
  *    The :c:member:`ezgrpc2_path_t.list_events` needs to be
@@ -239,7 +274,7 @@ int ezgrpc2_session_send(
   list_t list_messages);
 
 /**
- * The :c:func:`ezgrpc2_session_end_stream()` ends the stream associated with the session_uuid and stream_id
+ * The :c:func:`ezgrpc2_session_end_stream()` ends the stream associated with the session_uuid and stream_id.
  *
  * :returns:
  *    * On success, 0.
@@ -255,8 +290,8 @@ int ezgrpc2_session_end_stream(
   ezgrpc2_status_t status);
 
 /**
- * The :c:func:`ezgrpc2_session_end_session()` nds the stream associated
- * with the session_uuid and stream_id
+ * The :c:func:`ezgrpc2_session_end_session()` ends the session
+ * associated with the session_uuid.
  *
  * :returns:
  *    * On success, 0.

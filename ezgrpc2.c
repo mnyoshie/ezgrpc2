@@ -713,7 +713,7 @@ static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t l
   EZSSIZE ret = recv(ezsession->sockfd, buf, length, 0);
   if (ret == EZSOCKET_ERROR) {
 #ifdef _WIN32
-    switch (WSAGetLasError()) {
+    switch (WSAGetLastError()) {
       case WSAEWOULDBLOCK:
       case WSAEINTR:
         return NGHTTP2_ERR_WOULDBLOCK;
@@ -1375,7 +1375,7 @@ static int session_add(ezgrpc2_server_t *ezserver, int listenfd) {
   }
   ezlog(COLSTR("incoming %s connection\n", BHBLU), sockaddr.ss_family == AF_INET ? "ipv4" : "ipv6");
 
-  nfds_t ndx = get_unused_pollfd_ndx(fds, nb_fds);
+  EZNFDS ndx = get_unused_pollfd_ndx(fds, nb_fds);
   if (ndx == -1) {
     ezlog("max clients reached\n");
     shutdown(confd, SHUT_RDWR);
@@ -1496,6 +1496,7 @@ ezgrpc2_server_t *ezgrpc2_server_init(
   struct sockaddr_in6 ipv6_saddr = {0};
   ezgrpc2_server_t *server = NULL;
 #ifdef _WIN32
+  int ret;
   WSADATA wsa_data = {0};
   if ((ret = WSAStartup(0x0202, &wsa_data))) {
     ezlog("WSAStartup failed: error %d\n", ret);
@@ -1672,7 +1673,7 @@ int ezgrpc2_server_poll(
   if (fds[1].revents & POLLIN)
     session_add(server, fds[1].fd);
 
-  for (nfds_t i = 2; i < nb_fds; i++) {
+  for (EZNFDS i = 2; i < nb_fds; i++) {
     if (fds[i].fd != -1 && fds[i].revents & (POLLRDHUP | POLLERR)) {
       ezlog("c hangup\n");
       session_free(&server->sessions[i]);

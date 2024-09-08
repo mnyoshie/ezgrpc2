@@ -86,11 +86,18 @@ pthpool_t *pthpool_init(int workers, int flags);
  *
  * .. code-block:: C
  *
+ *    #include <stdlib.h> // free()
+ *    #include "pthpool.h"
+ *
  *    void *callback(void *data){return  NULL};
  *
  *    int main() {
  *      pthpool_t *pool = pthpool_init(4, 0);
- *      pthpool_add_task(pool, callback, NULL, NULL, NULL);
+ *
+ *      //free(NULL) has no effect
+ *      pthpool_add_task(pool, callback, NULL, free, free);
+ *      pthpool_destroy(pool);
+ *      return 0;
  *    }
  *
  *
@@ -116,6 +123,7 @@ pthpool_t *pthpool_init(int workers, int flags);
  *      for (int  i = 0; i < 5; i++)
  *        pthpool_add_task(pool, callback, malloc(i), ret_cleanup, userdata_cleanup);
  *      sleep(1);
+ *      // we did not poll
  *      pthpool_destroy(pool);
  *    }
  *

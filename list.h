@@ -80,10 +80,7 @@ void list_pushf_list(list_t *dst, list_t *src);
 void list_print(list_t *);
 
 /**
- * Finds user defined, ``userdata``, in the list, ``list`` using the
- * callback function ``cmp``.
- *
- * This function returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
+ * The :c:func:`list_find()` function finds and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
  * returns 1.
  *
  * The implementation of the callback comparison function, ``cmp`` must return 1
@@ -121,10 +118,7 @@ void list_print(list_t *);
 void *list_find(list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *cmpdata);
 
 /**
- * Finds and removes user defined, ``userdata``, in the list, ``list`` using the
- * callback function ``cmp``.
- *
- * This function returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
+ * The :c:func:`list_remove()` function removes and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
  * returns 1.
  *
  * The implementation of the callback comparison function, ``cmp`` must return 1
