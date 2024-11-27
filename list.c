@@ -1,3 +1,5 @@
+/* list.c - high performance singly linked list */
+
 #include "list.h"
 
 typedef struct listb_t listb_t;
@@ -7,12 +9,12 @@ struct listb_t {
 };
 
 
-void list_init(list_t *l) {
+void ezgrpc2_list_init(ezgrpc2_list_t *l) {
   l->head = NULL;
   l->tail = &l->head;
 }
 
-size_t list_count(list_t *l) {
+size_t ezgrpc2_list_count(ezgrpc2_list_t *l) {
   size_t c = 0;
   for (listb_t **b = (listb_t**)&l->head; *b != NULL; b = &(*b)->next)
     c++;
@@ -20,11 +22,11 @@ size_t list_count(list_t *l) {
   return c;
 }
 
-int list_is_empty(list_t *l) {
+int ezgrpc2_list_is_empty(ezgrpc2_list_t *l) {
   return l->head == NULL;
 }
 
-void *list_find(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata) {
+void *ezgrpc2_list_find(ezgrpc2_list_t *l, int (*cmp)(void *data, void *userdata), void *userdata) {
   for (listb_t **b = (listb_t**)&l->head; *b != NULL; b = &(*b)->next) {
     if (cmp((*b)->data, userdata))
       return (*b)->data;
@@ -33,7 +35,7 @@ void *list_find(list_t *l, int (*cmp)(void *data, void *userdata), void *userdat
 }
 
 /* remove */
-void *list_remove(list_t *l, int (*cmp)(void *data, void *userdata), void *userdata) {
+void *ezgrpc2_list_remove(ezgrpc2_list_t *l, int (*cmp)(void *data, void *userdata), void *userdata) {
   listb_t **b = (listb_t**)&l->head;
 
   while (*b != NULL && !cmp((*b)->data, userdata))
@@ -52,7 +54,7 @@ void *list_remove(list_t *l, int (*cmp)(void *data, void *userdata), void *userd
 }
 
 /* appends to the end (tail) (push front)*/
-int list_pushf(list_t *l, void *data){
+int ezgrpc2_list_pushf(ezgrpc2_list_t *l, void *data){
   listb_t *b = malloc(sizeof(*b));
   if (b == NULL) {
     return 1;
@@ -65,7 +67,7 @@ int list_pushf(list_t *l, void *data){
   return 0;
 }
 
-int list_pushb(list_t *l, void *data){
+int ezgrpc2_list_pushb(ezgrpc2_list_t *l, void *data){
   listb_t *b = malloc(sizeof(*b));
   if (b == NULL) {
     return 1;
@@ -78,7 +80,7 @@ int list_pushb(list_t *l, void *data){
 }
 
 /* pops the head (pop back) */
-void *list_popb(list_t *l) {
+void *ezgrpc2_list_popb(ezgrpc2_list_t *l) {
   if (l == NULL || l->head == NULL ) {
     return NULL;
   }
@@ -94,23 +96,23 @@ void *list_popb(list_t *l) {
 }
 
 /* (peek back) */
-void *list_peekb(list_t *l) {
+void *ezgrpc2_list_peekb(ezgrpc2_list_t *l) {
   if (l->head == NULL)
     return NULL;
 
   return ((listb_t*)l->head)->data;
 }
 
-void list_pushf_list(list_t *dst, list_t *src) {
+void ezgrpc2_list_pushf_list(ezgrpc2_list_t *dst, ezgrpc2_list_t *src) {
   if (dst->head == NULL)
     dst->head = src->head;
   *(listb_t**)dst->tail = src->head;
   dst->tail = src->tail;
-  list_init(src);
+  ezgrpc2_list_init(src);
 }
 
 
-void list_print(list_t *l) {
+void ezgrpc2_list_print(ezgrpc2_list_t *l) {
   for (listb_t **p = (listb_t**)&l->head; *p != NULL; p = &(*p)->next) {
     printf("%p\n",  (*p)->data);
   }
@@ -123,23 +125,23 @@ int cmp(void *data, void *userdata) {
 }
 
 int main() {
-  list_t l;
-  list_init(&l);
-  list_pushf(&l, (void*)0x123);
-  list_pushf(&l, (void*)0x13);
-  list_pushf(&l, (void*)0x23);
-  list_popb(&l);
-  list_pushf(&l, (void*)0x125);
-  list_pushf(&l, (void*)0x925);
-  list_popb(&l);
-  list_popb(&l);
-  list_pushf(&l, (void*)0x325);
-  if (list_remove(&l, cmp, (void*)0x125) == NULL)
+  ezgrpc2_list_t l;
+  ezgrpc2_list_init(&l);
+  ezgrpc2_list_pushf(&l, (void*)0x123);
+  ezgrpc2_list_pushf(&l, (void*)0x13);
+  ezgrpc2_list_pushf(&l, (void*)0x23);
+  ezgrpc2_list_popb(&l);
+  ezgrpc2_list_pushf(&l, (void*)0x125);
+  ezgrpc2_list_pushf(&l, (void*)0x925);
+  ezgrpc2_list_popb(&l);
+  ezgrpc2_list_popb(&l);
+  ezgrpc2_list_pushf(&l, (void*)0x325);
+  if (ezgrpc2_list_remove(&l, cmp, (void*)0x125) == NULL)
     puts("hi");
-  list_pushf(&l, (void*)0x13);
-  list_pushb(&l , (void*)0x535);
+  ezgrpc2_list_pushf(&l, (void*)0x13);
+  ezgrpc2_list_pushb(&l , (void*)0x535);
 
-  list_print(&l);
+  ezgrpc2_list_print(&l);
 
   return 0;
 }

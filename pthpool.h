@@ -7,12 +7,12 @@
 #include <time.h>
 #include "list.h"
 
-typedef struct pthpool_result_t pthpool_result_t;
+typedef struct ezgrpc2_pthpool_result_t ezgrpc2_pthpool_result_t;
 
 /**
  * A struct describing the result of :c:func:`pthpoll_poll()`
  */
-struct pthpool_result_t {
+struct ezgrpc2_pthpool_result_t {
   char is_timeout;
   time_t timeout;
   void (*ret_cleanup)(void *ret);
@@ -21,8 +21,8 @@ struct pthpool_result_t {
   void *userdata, *ret;
 };
 
-typedef struct pthpool_t pthpool_t;
-struct pthpool_t;
+typedef struct ezgrpc2_pthpool_t ezgrpc2_pthpool_t;
+struct ezgrpc2_pthpool_t;
 
 /**
  * Initializes the thread pool.
@@ -39,9 +39,9 @@ struct pthpool_t;
  *
  * .. code-block:: C
  *
- *   pthpool_t *pool = pthpool_init(4, 0);
+ *   ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
  */
-pthpool_t *pthpool_init(int workers, int flags);
+ezgrpc2_pthpool_t *ezgrpc2_pthpool_init(int workers, int flags);
 
 /**
  * Adds task to the thread pool.
@@ -56,23 +56,23 @@ pthpool_t *pthpool_init(int workers, int flags);
  *                  .. warning::
  *                    User must exercise caution in sharing the same ``userdata`` to two
  *                    or more tasks and should set param ``userdata_cleanup`` to ``NULL`` to prevent
- *                    a possible double free when :c:func:`pthpool_destroy()` is called.
+ *                    a possible double free when :c:func:`ezgrpc2_pthpool_destroy()` is called.
  * :param ret_cleanup: Cleanup handler for the value returned by ``func``
  *                     when the task is not popped out of pool via a call to
- *                     :c:func:`pthpool_poll()`.
+ *                     :c:func:`ezgrpc2_pthpool_poll()`.
  *
- *                     This is called when the pool is stopped via :c:func:`pthpool_destroy`
- *                     and there's executed tasks not popped via :c:func:`pthpool_poll`.
+ *                     This is called when the pool is stopped via :c:func:`ezgrpc2_pthpool_destroy`
+ *                     and there's executed tasks not popped via :c:func:`ezgrpc2_pthpool_poll`.
  *
  *                     If ``NULL``, no cleanup is performed.
  * :param userdata_cleanup: Cleanup handler for the parameter ``userdata`` when the task is
- *                         not popped out of pool via a call to :c:func:`pthpool_poll()`.
+ *                         not popped out of pool via a call to :c:func:`ezgrpc2_pthpool_poll()`.
  *
- *                         This is called when the pool is stopped via :c:func:`pthpool_destroy`
+ *                         This is called when the pool is stopped via :c:func:`ezgrpc2_pthpool_destroy`
  *                         and there's tasks left in the queue unexecuted.
  *
  *                         If ``NULL``, no cleanup is performed.
- * :returns: The :c:func:`pthpool_add_task` function returns an integer indicating the result
+ * :returns: The :c:func:`ezgrpc2_pthpool_add_task` function returns an integer indicating the result
  *           of the operation as follows:
  *
  *           * 0, if the addition of the task is successfull.
@@ -92,11 +92,11 @@ pthpool_t *pthpool_init(int workers, int flags);
  *    void *callback(void *data){return  NULL};
  *
  *    int main() {
- *      pthpool_t *pool = pthpool_init(4, 0);
+ *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
  *
  *      //free(NULL) has no effect
- *      pthpool_add_task(pool, callback, NULL, free, free);
- *      pthpool_destroy(pool);
+ *      ezgrpc2_pthpool_add_task(pool, callback, NULL, free, free);
+ *      ezgrpc2_pthpool_destroy(pool);
  *      return 0;
  *    }
  *
@@ -119,12 +119,12 @@ pthpool_t *pthpool_init(int workers, int flags);
  *    void *callback(void *data){return  malloc(32);};
  *
  *    int main() {
- *      pthpool_t *pool = pthpool_init(4, 0);
+ *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
  *      for (int  i = 0; i < 5; i++)
- *        pthpool_add_task(pool, callback, malloc(i), ret_cleanup, userdata_cleanup);
+ *        ezgrpc2_pthpool_add_task(pool, callback, malloc(i), ret_cleanup, userdata_cleanup);
  *      sleep(1);
  *      // we did not poll
- *      pthpool_destroy(pool);
+ *      ezgrpc2_pthpool_destroy(pool);
  *    }
  *
  * Result 2: :: 
@@ -141,9 +141,9 @@ pthpool_t *pthpool_init(int workers, int flags);
  *    called ret_cleanup
  *     
  */
-int pthpool_add_task(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*));
+int ezgrpc2_pthpool_add_task(ezgrpc2_pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*));
 
-int pthpool_add_task2(pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout);
+int ezgrpc2_pthpool_add_task2(ezgrpc2_pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout);
 
 /**
  * Destroys the thread pool.
@@ -153,27 +153,27 @@ int pthpool_add_task2(pthpool_t *pool, void *(*func)(void*), void *userdata, voi
  * If there's unexecuted tasks left in the pool, it is popped and the 
  * registered ``userdata_cleanup``, if setted, is called.
  *
- * If there's executed tasks left in pool, not popped via, :c:func:`pthpool_poll()`,
+ * If there's executed tasks left in pool, not popped via, :c:func:`ezgrpc2_pthpool_poll()`,
  * it is popped, and the registered,  ``userdata_cleanup`` and ``ret_cleanup``,
  * if setted, is called with the argument ``userdata`` and ``ret``, respectively.
  *
  */
-void pthpool_destroy(pthpool_t *pool);
+void ezgrpc2_pthpool_destroy(ezgrpc2_pthpool_t *pool);
 
 
 /**
- * Polls for finished tasks in the thread pool amd appends it to ``list_results``.
+ * Polls for finished tasks in the thread pool amd appends it to ``ezgrpc2_list_results``.
  *
  * :param pool: The thread pool
  * :param list: The list to be filled.
  * :returns: None
  *
- * The filled ``list_results`` is freed by repeatedly popping it with
- * :c:func:`list_popb` until it returns NULL.
+ * The filled ``ezgrpc2_list_results`` is freed by repeatedly popping it with
+ * :c:func:`ezgrpc2_list_popb` until it returns NULL.
  *
- * The address returned by :c:func:`list_popb`, for ``list`` filled
- * by :c:func:`pthpool_poll` is of address which can be safely casted to
- * a pointer to :c:struct:`pthpool_result_t`. This :c:struct:`pthpool_result_t`
+ * The address returned by :c:func:`ezgrpc2_list_popb`, for ``list`` filled
+ * by :c:func:`ezgrpc2_pthpool_poll` is of address which can be safely casted to
+ * a pointer to :c:struct:`ezgrpc2_pthpool_result_t`. This :c:struct:`ezgrpc2_pthpool_result_t`
  * must be freed with :c:func:`free`.
  *
  * Example 1:
@@ -187,20 +187,20 @@ void pthpool_destroy(pthpool_t *pool);
  *    void *callback(void *data){return (char *)data + 1};
  *
  *    int main() {
- *      pthpool_t *pool = pthpool_init(4, 0);
- *      pthpool_add_task(pool, callback, (void*)0x32, NULL, NULL);
- *      pthpool_add_task(pool, callback, (void*)0x192, NULL, NULL);
+ *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
+ *      ezgrpc2_pthpool_add_task(pool, callback, (void*)0x32, NULL, NULL);
+ *      ezgrpc2_pthpool_add_task(pool, callback, (void*)0x192, NULL, NULL);
  *      // wait for the tasks to get executed
  *      sleep(2);
- *      list_t l;
- *      pthpool_poll(pool, &l);
- *      pthpool_result_t *t;
- *      while ((t = list_popb(&l)) != NULL) {
+ *      ezgrpc2_list_t l;
+ *      ezgrpc2_pthpool_poll(pool, &l);
+ *      ezgrpc2_pthpool_result_t *t;
+ *      while ((t = ezgrpc2_list_popb(&l)) != NULL) {
  *        printf("userdata = %p\n", t->userdata);
  *        printf("ret = %p\n", t->ret);
  *        free(t);
  *      }
- *      pthpool_destroy(pool);
+ *      ezgrpc2_pthpool_destroy(pool);
  *    }
  *
  * Result 1: :: 
@@ -210,7 +210,7 @@ void pthpool_destroy(pthpool_t *pool);
  *    userdata = 0x192
  *    ret = 0x193
  */
-void pthpool_poll(pthpool_t *pool, list_t *list_results);
+void ezgrpc2_pthpool_poll(ezgrpc2_pthpool_t *pool, ezgrpc2_list_t *ezgrpc2_list_results);
 
 
 /**
@@ -221,5 +221,5 @@ void pthpool_poll(pthpool_t *pool, list_t *list_results);
  *
  *           If not empty, ``0``
  */
-int pthpool_is_empty(pthpool_t *pool);
+int ezgrpc2_pthpool_is_empty(ezgrpc2_pthpool_t *pool);
 #endif

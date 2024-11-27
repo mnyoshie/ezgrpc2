@@ -2,12 +2,17 @@
 #define MNLIST_H
 #include <stdlib.h>
 
-typedef struct list_t list_t;
+typedef struct ezgrpc2_list_t ezgrpc2_list_t;
 
 /**
- * An opaque list context
+ * An opaque list context. 
+ *
+ * Declaration of this type such as ``ezgrpc2_list_t l``,
+ * must be immediately initialized by a call to, :c:func:`ezgrpc2_list_init()` as
+ * ``ezgrpc2_list_init(&l)``.
+ *
  */
-struct list_t {
+struct ezgrpc2_list_t {
   void *head, **tail;
 };
 
@@ -15,14 +20,14 @@ struct list_t {
  *   Initializes the list at the address pointed by the parameter ``list``
  *
  */
-void list_init(list_t *list);
+void ezgrpc2_list_init(ezgrpc2_list_t *list);
 
 
 /**
  *   Counts the number of list at the address pointed by the parameter ``list``
  *
  */
-size_t list_count(list_t *list);
+size_t ezgrpc2_list_count(ezgrpc2_list_t *list);
 
 /**
  * Pushes the user defined ``userdata`` to the front of the list ``list``
@@ -33,7 +38,7 @@ size_t list_count(list_t *list);
  *
  *           * On failure, non-zero
  */
-int list_pushf(list_t *list, void *userdata);
+int ezgrpc2_list_pushf(ezgrpc2_list_t *list, void *userdata);
 
 /**
  * Pushes the user defined ``userdata`` to the back of the list ``list``
@@ -44,7 +49,7 @@ int list_pushf(list_t *list, void *userdata);
  *
  *           * On failure, non-zero
  */
-int list_pushb(list_t *list, void *userdata);
+int ezgrpc2_list_pushb(ezgrpc2_list_t *list, void *userdata);
 
 /**
  * Pops the user defined ``userdata`` from the back of the list, ``list``
@@ -55,7 +60,7 @@ int list_pushb(list_t *list, void *userdata);
  *
  *           * On an empty list, ``NULL``.
  */
-void *list_popb(list_t *list);
+void *ezgrpc2_list_popb(ezgrpc2_list_t *list);
 
 /**
  * Peeks from the back of the list, ``list``.
@@ -66,7 +71,7 @@ void *list_popb(list_t *list);
  *
  *           * On an empty list, ``NULL``.
  */
-void *list_peekb(list_t *list);
+void *ezgrpc2_list_peekb(ezgrpc2_list_t *list);
 
 
 /**
@@ -75,12 +80,12 @@ void *list_peekb(list_t *list);
  * :param dst: The destination list
  * :param src: The source list
  */
-void list_pushf_list(list_t *dst, list_t *src);
+void ezgrpc2_list_pushf_list(ezgrpc2_list_t *dst, ezgrpc2_list_t *src);
 
-void list_print(list_t *);
+void ezgrpc2_list_print(ezgrpc2_list_t *);
 
 /**
- * The :c:func:`list_find()` function finds and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
+ * The :c:func:`ezgrpc2_list_find()` function finds and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
  * returns 1.
  *
  * The implementation of the callback comparison function, ``cmp`` must return 1
@@ -104,21 +109,21 @@ void list_print(list_t *);
  *    }
  *    
  *    int main() {
- *      list_t l;
- *      list_init(&l);
- *      list_pushf(&l, (void*)0x1);
- *      list_pushf(&l, (void*)0x4);
- *      list_pushf(&l, (void*)0x11);
+ *      ezgrpc2_list_t l;
+ *      ezgrpc2_list_init(&l);
+ *      ezgrpc2_list_pushf(&l, (void*)0x1);
+ *      ezgrpc2_list_pushf(&l, (void*)0x4);
+ *      ezgrpc2_list_pushf(&l, (void*)0x11);
  *    
- *      list_find(&l, cmp, (void*)4); // returns 4
- *      list_find(&l, cmp, (void*)13); // returns NULL
+ *      ezgrpc2_list_find(&l, cmp, (void*)4); // returns 4
+ *      ezgrpc2_list_find(&l, cmp, (void*)13); // returns NULL
  *      return 0;
  *    }
  */
-void *list_find(list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *cmpdata);
+void *ezgrpc2_list_find(ezgrpc2_list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *cmpdata);
 
 /**
- * The :c:func:`list_remove()` function removes and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
+ * The :c:func:`ezgrpc2_list_remove()` function removes and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
  * returns 1.
  *
  * The implementation of the callback comparison function, ``cmp`` must return 1
@@ -143,18 +148,18 @@ void *list_find(list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *c
  *    }
  *    
  *    int main() {
- *      list_t l;
- *      list_init(&l);
- *      list_pushf(&l, (void*)0x1);
- *      list_pushf(&l, (void*)0x4);
- *      list_pushf(&l, (void*)0x11);
+ *      ezgrpc2_list_t l;
+ *      ezgrpc2_list_init(&l);
+ *      ezgrpc2_list_pushf(&l, (void*)0x1);
+ *      ezgrpc2_list_pushf(&l, (void*)0x4);
+ *      ezgrpc2_list_pushf(&l, (void*)0x11);
  *    
- *      list_remove(&l, cmp, (void*)4); // returns 4
- *      list_remove(&l, cmp, (void*)13); // returns NULL
+ *      ezgrpc2_list_remove(&l, cmp, (void*)4); // returns 4
+ *      ezgrpc2_list_remove(&l, cmp, (void*)13); // returns NULL
  *      return 0;
  *    }
  */
-void *list_remove(list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *cmpdata);
+void *ezgrpc2_list_remove(ezgrpc2_list_t *list, int (*cmp)(void *userdata, void *cmpdata), void *cmpdata);
 
 /**
  * Checks if the list is empty.
@@ -163,6 +168,6 @@ void *list_remove(list_t *list, int (*cmp)(void *userdata, void *cmpdata), void 
  *
  *           * Else, 0
  */
-int list_is_empty(list_t *list);
+int ezgrpc2_list_is_empty(ezgrpc2_list_t *list);
 
 #endif

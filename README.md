@@ -56,8 +56,7 @@ int main() {
   /* worker must be one for an ordered execution */
   ordered_pool = pthpool_init(1, -1);
   assert(ordered_pool != NULL);
-  //ezgrpc2_server_t *server = ezgrpc2_server_init("127.0.0.1", 19009, NULL, -1, 16);
-  ezgrpc2_server_t *server = ezgrpc2_server_init("0.0.0.0", 19009, "::", 19009, 16);
+  ezgrpc2_server_t *server = ezgrpc2_server_init("0.0.0.0", 19009, "::", 19009, 16, NULL);
   assert(server != NULL);
 
 

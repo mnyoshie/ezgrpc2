@@ -1,13 +1,13 @@
 list documentation
 ==================
 
-.. autocstruct:: list.h::list_t
-.. autocfunction:: list.h::list_init 
-.. autocfunction:: list.h::list_is_empty
-.. autocfunction:: list.h::list_count
-.. autocfunction:: list.h::list_pushf
-.. autocfunction:: list.h::list_pushb
-.. autocfunction:: list.h::list_popb
-.. autocfunction:: list.h::list_find
-.. autocfunction:: list.h::list_remove
-.. autocfunction:: list.h::list_pushf_list
+.. autocstruct:: list.h::ezgrpc2_list_t
+.. autocfunction:: list.h::ezgrpc2_list_init 
+.. autocfunction:: list.h::ezgrpc2_list_is_empty
+.. autocfunction:: list.h::ezgrpc2_list_count
+.. autocfunction:: list.h::ezgrpc2_list_pushf
+.. autocfunction:: list.h::ezgrpc2_list_pushb
+.. autocfunction:: list.h::ezgrpc2_list_popb
+.. autocfunction:: list.h::ezgrpc2_list_find
+.. autocfunction:: list.h::ezgrpc2_list_remove
+.. autocfunction:: list.h::ezgrpc2_list_pushf_list

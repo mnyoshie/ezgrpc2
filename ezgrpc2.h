@@ -102,10 +102,10 @@ typedef struct ezgrpc2_event_message_t ezgrpc2_event_message_t;
 struct ezgrpc2_event_message_t {
   char end_stream;
   i32 stream_id;
-  /* Cast the return of :c:func:`list_popb` to a pointer to
+  /* Cast the return of :c:func:`ezgrpc2_list_popb` to a pointer to
    * :c:struct:`ezgrpc2_message_t`
    * */
-  list_t list_messages;
+  ezgrpc2_list_t lmessages;
 };
 
 typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;
@@ -113,13 +113,13 @@ typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;
  *
  */
 struct ezgrpc2_event_dataloss_t {
-  /* cast list_popb to ``ezgrpc2_message_t *`` */
+  /* cast ezgrpc2_list_popb to ``ezgrpc2_message_t *`` */
   i32 stream_id;
 };
 
 typedef struct ezgrpc2_event_t ezgrpc2_event_t;
 /**
- * This is the events stored in :c:member:`ezgrpc2_path_t.list_events`.
+ * This is the events stored in :c:member:`ezgrpc2_path_t.levents`.
  */
 struct ezgrpc2_event_t {
 
@@ -151,7 +151,7 @@ struct ezgrpc2_event_t {
 typedef struct ezgrpc2_path_t ezgrpc2_path_t;
 struct ezgrpc2_path_t {
   /**
-   * Path to listen to. Must not contain an anchor or query
+   * Path to listen to. Must not contain an anchor or a query (# or ?)
    */
   char *path;
 
@@ -164,9 +164,9 @@ struct ezgrpc2_path_t {
    * This is a list of :c:struct:`ezgrpc2_event_t` and it
    * contains events for this specific path.
    *
-   * Cast the return of :c:func:`list_popb()` to a pointer to :c:struct:`ezgrpc2_event_t` when its argument id ``list_events``
+   * Cast the return of :c:func:`ezgrpc2_list_popb()` to a pointer to :c:struct:`ezgrpc2_event_t` when its argument id ``levents``
    */
-  list_t list_events;
+  ezgrpc2_list_t levents;
 };
 
 
@@ -190,9 +190,11 @@ extern "C" {
 /**
  * The :c:func:`ezgrpc2_server_init()` function creates a ezserver context,
  * binding to the associated ``ipv4_addr`` and ``ipv6_addr`` if it's not
- * `NULL`.
+ * ``NULL``.
  *
  * At no point ``ipv4_addr`` and ``ipv6_addr`` be ``NULL.``
+ *
+ * :param settings: Unused. Reserved for future implementation. Must be set to ``NULL``.
  *
  * :returns:
  *
@@ -204,13 +206,14 @@ extern "C" {
  *
  * .. code-block:: C
  *
- *    ezgrpc2_server_t *ezgrpc2_server_init("0.0.0.0", 8080, "::", 8080, 16);
+ *    ezgrpc2_server_t *ezgrpc2_server_init("0.0.0.0", 8080, "::", 8080, 16, NULL);
  *
  */
 ezgrpc2_server_t *ezgrpc2_server_init(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
-  int backlog);
+  int backlog,
+  void *settings);
 
 
 /**
@@ -229,8 +232,8 @@ ezgrpc2_server_t *ezgrpc2_server_init(
  *    * On error, a negative value.
  *
  * .. note::
- *    The :c:member:`ezgrpc2_path_t.list_events` needs to be
- *    initialized first with, :c:func:`list_init()`.
+ *    The :c:member:`ezgrpc2_path_t.levents` needs to be
+ *    initialized first with, :c:func:`ezgrpc2_list_init()`.
  *
  *
  */
@@ -243,13 +246,13 @@ int ezgrpc2_server_poll(
 void ezgrpc2_server_destroy(
   ezgrpc2_server_t *server);
 
-//int ezgrpc2_session_submit_response(ezgrpc2_session_t *ezsession, i32 stream_id, list_t *list_messages, int end_stream, int grpc_status);
+//int ezgrpc2_session_submit_response(ezgrpc2_session_t *ezsession, i32 stream_id, ezgrpc2_list_t *lmessages, int end_stream, int grpc_status);
 
 /**
  * The :c:func:`ezgrpc2_session_send()` sends the  messages in the list,
- * ``list_messages`` to the associated session_uuid and stream_id.
+ * ``lmessages`` to the associated session_uuid and stream_id.
 
- * On success, the :c:func:`ezgrpc2_session_send()` takes ownership of list_messages 
+ * On success, the :c:func:`ezgrpc2_session_send()` takes ownership of lmessages 
  *
  * A sucessful return value may mean:
  *
@@ -271,7 +274,7 @@ int ezgrpc2_session_send(
   ezgrpc2_server_t *ezserver,
   char session_uuid[EZGRPC2_SESSION_UUID_LEN],
   i32 stream_id,
-  list_t list_messages);
+  ezgrpc2_list_t lmessages);
 
 /**
  * The :c:func:`ezgrpc2_session_end_stream()` ends the stream associated with the session_uuid and stream_id.
@@ -306,7 +309,7 @@ int ezgrpc2_session_end_session(
 
 #if 0
 /* list of ezgrpc2_header_t */
-list_t ezgrpc2_session_get_headers(
+ezgrpc2_list_t ezgrpc2_session_get_headers(
   ezgrpc2_server_t *ezserver,
   char session_id[EZGRPC2_SESSION_UUID_LEN],
   i32 stream_id);
