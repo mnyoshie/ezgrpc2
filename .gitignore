@@ -1,9 +1,12 @@
 a.out
 *.o
+*.so
+*.a
 *.bin
 *cpp
 core
 test*.c
 *.swp
+push
 
 docs/build

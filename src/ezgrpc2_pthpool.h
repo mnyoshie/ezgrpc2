@@ -2,10 +2,10 @@
  * pthpool.h - A C library for pollable thread pools
  * */
 
-#ifndef MNTHPOOL_H
-#define MNTHPOOL_H
+#ifndef EZGRPC2_THPOOL_H
+#define EZGRPC2_THPOOL_H
 #include <time.h>
-#include "list.h"
+#include "ezgrpc2_list.h"
 
 typedef struct ezgrpc2_pthpool_result_t ezgrpc2_pthpool_result_t;
 
@@ -39,9 +39,9 @@ struct ezgrpc2_pthpool_t;
  *
  * .. code-block:: C
  *
- *   ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
+ *   ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_new(4, 0);
  */
-ezgrpc2_pthpool_t *ezgrpc2_pthpool_init(int workers, int flags);
+ezgrpc2_pthpool_t *ezgrpc2_pthpool_new(int workers, int flags);
 
 /**
  * Adds task to the thread pool.
@@ -56,7 +56,7 @@ ezgrpc2_pthpool_t *ezgrpc2_pthpool_init(int workers, int flags);
  *                  .. warning::
  *                    User must exercise caution in sharing the same ``userdata`` to two
  *                    or more tasks and should set param ``userdata_cleanup`` to ``NULL`` to prevent
- *                    a possible double free when :c:func:`ezgrpc2_pthpool_destroy()` is called.
+ *                    a possible double free when :c:func:`ezgrpc2_pthpool_free()` is called.
  * :param ret_cleanup: Cleanup handler for the value returned by ``func``
  *                     when the task is not popped out of pool via a call to
  *                     :c:func:`ezgrpc2_pthpool_poll()`.
@@ -92,11 +92,11 @@ ezgrpc2_pthpool_t *ezgrpc2_pthpool_init(int workers, int flags);
  *    void *callback(void *data){return  NULL};
  *
  *    int main() {
- *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
+ *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_new(4, 0);
  *
  *      //free(NULL) has no effect
  *      ezgrpc2_pthpool_add_task(pool, callback, NULL, free, free);
- *      ezgrpc2_pthpool_destroy(pool);
+ *      ezgrpc2_pthpool_free(pool);
  *      return 0;
  *    }
  *
@@ -119,12 +119,12 @@ ezgrpc2_pthpool_t *ezgrpc2_pthpool_init(int workers, int flags);
  *    void *callback(void *data){return  malloc(32);};
  *
  *    int main() {
- *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
+ *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_new(4, 0);
  *      for (int  i = 0; i < 5; i++)
  *        ezgrpc2_pthpool_add_task(pool, callback, malloc(i), ret_cleanup, userdata_cleanup);
  *      sleep(1);
  *      // we did not poll
- *      ezgrpc2_pthpool_destroy(pool);
+ *      ezgrpc2_pthpool_free(pool);
  *    }
  *
  * Result 2: :: 
@@ -158,7 +158,7 @@ int ezgrpc2_pthpool_add_task2(ezgrpc2_pthpool_t *pool, void *(*func)(void*), voi
  * if setted, is called with the argument ``userdata`` and ``ret``, respectively.
  *
  */
-void ezgrpc2_pthpool_destroy(ezgrpc2_pthpool_t *pool);
+void ezgrpc2_pthpool_free(ezgrpc2_pthpool_t *pool);
 
 
 /**
@@ -187,7 +187,7 @@ void ezgrpc2_pthpool_destroy(ezgrpc2_pthpool_t *pool);
  *    void *callback(void *data){return (char *)data + 1};
  *
  *    int main() {
- *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_init(4, 0);
+ *      ezgrpc2_pthpool_t *pool = ezgrpc2_pthpool_new(4, 0);
  *      ezgrpc2_pthpool_add_task(pool, callback, (void*)0x32, NULL, NULL);
  *      ezgrpc2_pthpool_add_task(pool, callback, (void*)0x192, NULL, NULL);
  *      // wait for the tasks to get executed
@@ -200,7 +200,7 @@ void ezgrpc2_pthpool_destroy(ezgrpc2_pthpool_t *pool);
  *        printf("ret = %p\n", t->ret);
  *        free(t);
  *      }
- *      ezgrpc2_pthpool_destroy(pool);
+ *      ezgrpc2_pthpool_free(pool);
  *    }
  *
  * Result 1: :: 
@@ -222,4 +222,6 @@ void ezgrpc2_pthpool_poll(ezgrpc2_pthpool_t *pool, ezgrpc2_list_t *ezgrpc2_list_
  *           If not empty, ``0``
  */
 int ezgrpc2_pthpool_is_empty(ezgrpc2_pthpool_t *pool);
+
+void ezgrpc2_pthpool_stop_and_join(ezgrpc2_pthpool_t *pool);
 #endif
