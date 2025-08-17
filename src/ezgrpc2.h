@@ -8,7 +8,7 @@
 #endif
 
 #include <stdint.h>
-#include "list.h"
+#include "ezgrpc2_list.h"
 
 #ifdef _WIN32
 #  include <winsock2.h>
@@ -16,7 +16,7 @@
 #endif
 
 #define EZGRPC_MAX_SESSIONS 32
-#define EZGRPC2_SESSION_UUID_LEN 37
+//#define EZGRPC2_SESSION_UUID_LEN 37
 
 
 typedef char i8;
@@ -69,12 +69,13 @@ enum ezgrpc2_event_type_t {
 };
 
 
-typedef struct ezgrpc2_session_t ezgrpc2_session_t;
 typedef struct ezgrpc2_server_t ezgrpc2_server_t;
 /**
  * An opaque server context struct type returned by :c:func:`ezgrpc2_server_init()`.
  */
 struct ezgrpc2_server_t;
+
+typedef void ezgrpc2_session_uuid_t;
 
 typedef struct ezgrpc2_header_t ezgrpc2_header_t;
 /**
@@ -105,7 +106,7 @@ struct ezgrpc2_event_message_t {
   /* Cast the return of :c:func:`ezgrpc2_list_popb` to a pointer to
    * :c:struct:`ezgrpc2_message_t`
    * */
-  ezgrpc2_list_t lmessages;
+  ezgrpc2_list_t *lmessages;
 };
 
 typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;
@@ -123,7 +124,8 @@ typedef struct ezgrpc2_event_t ezgrpc2_event_t;
  */
 struct ezgrpc2_event_t {
 
-  char session_uuid[EZGRPC2_SESSION_UUID_LEN];
+  ezgrpc2_session_uuid_t *session_uuid;
+
   ezgrpc2_event_type_t type;
 
   /**
@@ -164,9 +166,9 @@ struct ezgrpc2_path_t {
    * This is a list of :c:struct:`ezgrpc2_event_t` and it
    * contains events for this specific path.
    *
-   * Cast the return of :c:func:`ezgrpc2_list_popb()` to a pointer to :c:struct:`ezgrpc2_event_t` when its argument id ``levents``
+   * Cast the return of :c:func:`ezgrpc2_list_pop_first()` to a pointer to :c:struct:`ezgrpc2_event_t` when its argument id ``levents``
    */
-  ezgrpc2_list_t levents;
+  ezgrpc2_list_t *levents;
 };
 
 
@@ -272,9 +274,9 @@ void ezgrpc2_server_destroy(
  */
 int ezgrpc2_session_send(
   ezgrpc2_server_t *ezserver,
-  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
-  ezgrpc2_list_t lmessages);
+  ezgrpc2_list_t *lmessages);
 
 /**
  * The :c:func:`ezgrpc2_session_end_stream()` ends the stream associated with the session_uuid and stream_id.
@@ -288,7 +290,7 @@ int ezgrpc2_session_send(
  */
 int ezgrpc2_session_end_stream(
   ezgrpc2_server_t *ezserver,
-  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
   ezgrpc2_status_t status);
 
@@ -303,7 +305,7 @@ int ezgrpc2_session_end_stream(
  */
 int ezgrpc2_session_end_session(
   ezgrpc2_server_t *ezserver,
-  char session_id[EZGRPC2_SESSION_UUID_LEN],
+  ezgrpc2_session_uuid_t *session_id,
   i32 last_stream_id,
   ezgrpc2_status_t status);
 
@@ -346,9 +348,11 @@ ezgrpc2_list_t ezgrpc2_session_get_headers(
  * */
 int ezgrpc2_session_find_header(
   ezgrpc2_server_t *ezserver,
-  char session_uuid[EZGRPC2_SESSION_UUID_LEN],
+  ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
   ezgrpc2_header_t *ezheader);
+
+ezgrpc2_session_uuid_t *ezgrpc2_session_uuid_copy(ezgrpc2_session_uuid_t *session_uuid);
 
 #ifdef __cplusplus
 }
