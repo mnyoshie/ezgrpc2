@@ -1,11 +1,12 @@
 #include <stdarg.h>
 #include "ezgrpc2.h"
 
-ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ...) {
+ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...) {
   va_list ap;
-  va_start(ap, type);
+  va_start(ap, session_uuid);
   ezgrpc2_event_t *event = malloc(sizeof(*event));
   event->type = type;
+  event->session_uuid = session_uuid;
   switch (type) {
   case EZGRPC2_EVENT_MESSAGE:
     event->message = va_arg(ap, ezgrpc2_event_message_t);
@@ -22,22 +23,25 @@ ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ...) {
 }
 
 void ezgrpc2_event_free(ezgrpc2_event_t *event) {
+  if (event == NULL) return;
 
   switch (event->type) {
   case EZGRPC2_EVENT_MESSAGE: {
     /* im a fucking genius */
-    ezgrpc2_event_message_t event_message = event->message;
     ezgrpc2_message_t *message;
-    while ((message = ezgrpc2_list_pop_front(event_message.lmessages)) !=
-           NULL) {
-      free(message->data);
-      free(message);
-    }
-    ezgrpc2_list_free(event_message.lmessages);
+    if (event->message.lmessages != NULL)
+      while ((message = ezgrpc2_list_pop_front(event->message.lmessages)) !=
+             NULL) {
+        free(message->data);
+        free(message);
+      }
+    ezgrpc2_list_free(event->message.lmessages);
   } break;
   case EZGRPC2_EVENT_CANCEL:
   case EZGRPC2_EVENT_DATALOSS:
     break;
+  default:
+    abort();
   }
 
   free(event);

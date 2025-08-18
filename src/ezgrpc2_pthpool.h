@@ -224,4 +224,7 @@ void ezgrpc2_pthpool_poll(ezgrpc2_pthpool_t *pool, ezgrpc2_list_t *ezgrpc2_list_
 int ezgrpc2_pthpool_is_empty(ezgrpc2_pthpool_t *pool);
 
 void ezgrpc2_pthpool_stop_and_join(ezgrpc2_pthpool_t *pool);
+
+
+void ezgrpc2_pthpool_result_free(ezgrpc2_pthpool_result_t *result);
 #endif

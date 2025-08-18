@@ -49,9 +49,11 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <uuid/uuid.h>
 #include <openssl/rand.h>
 #include <nghttp2/nghttp2.h>
+
+#include "ezgrpc2_event.h"
+
 
 //_Static_assert(UUID_STR_LEN == EZGRPC2_SESSION_UUID_LEN, "");
 
@@ -159,7 +161,8 @@ struct ezgrpc2_stream_t {
 typedef struct ezgrpc2_session_t ezgrpc2_session_t;
 struct ezgrpc2_session_t {
   //u8 session_id[32];
-  char session_uuid[UUID_STR_LEN];
+//  char session_uuid[UUID_STR_LEN];
+  ezgrpc2_session_uuid_t *session_uuid;
 
   EZSOCKET sockfd;
   struct sockaddr_storage sockaddr;
@@ -555,7 +558,7 @@ static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
     break;
   } 
 exit:
-  atlog("read done\n");
+  atlog("read done %d bytes\n", buf_seek);
  // *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
   return buf_seek;
 }
@@ -969,13 +972,15 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     /* In scenarios where the Request stream needs to be closed but no data remains
      * to be sent implementations MUST send an empty DATA frame with this flag set. */
     atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event_t *event = malloc(sizeof(*event));
-    event->type = EZGRPC2_EVENT_MESSAGE;
-
-    event->session_uuid = ezgrpc2_session_uuid_copy((ezgrpc2_session_uuid_t*)ezsession->session_uuid);
-    event->message.lmessages = lmessages;
-    event->message.end_stream = 1;
-    event->message.stream_id = frame->hd.stream_id;
+    ezgrpc2_event_t *event = ezgrpc2_event_new(
+      EZGRPC2_EVENT_MESSAGE,
+      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
+      (ezgrpc2_event_message_t) {
+        .lmessages = lmessages,
+        .end_stream = 1,
+        .stream_id = frame->hd.stream_id,
+      }
+    );
 
     ezgrpc2_list_push_back(ezstream->path->levents, event);
     return 0;
@@ -985,26 +990,30 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
   if (lseek != 0) {
     assert(lseek <= ezstream->recv_len);
     atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event_t *event = malloc(sizeof(*event));
-
-    event->type = EZGRPC2_EVENT_MESSAGE;
-    event->session_uuid = ezgrpc2_session_uuid_copy((ezgrpc2_session_uuid_t*)ezsession->session_uuid);
-    event->message.lmessages = lmessages;
-    event->message.stream_id = frame->hd.stream_id;
-
     memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
     ezstream->recv_len -= lseek;
-    event->message.end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0;
+    ezgrpc2_event_t *event = ezgrpc2_event_new(
+      EZGRPC2_EVENT_MESSAGE,
+      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
+      (ezgrpc2_event_message_t) {
+        .lmessages = lmessages,
+        .end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0,
+        .stream_id = frame->hd.stream_id,
+      }
+    );
+
     ezgrpc2_list_push_back(ezstream->path->levents, event);
   }
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
     /* we've receaived an end stream but last message is truncated */
     atlog("event dataloss %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event_t *event = malloc(sizeof(*event));
-    event->type = EZGRPC2_EVENT_DATALOSS;
-    event->session_uuid = ezgrpc2_session_uuid_copy((ezgrpc2_session_uuid_t*)ezsession->session_uuid);
-  
-    event->dataloss.stream_id = ezstream->stream_id;
+    ezgrpc2_event_t *event = ezgrpc2_event_new(
+      EZGRPC2_EVENT_DATALOSS,
+      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
+      (ezgrpc2_event_dataloss_t) {
+        .stream_id = ezstream->stream_id,
+      }
+    );
   
     ezgrpc2_list_push_back(ezstream->path->levents, event);
     //event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
@@ -1189,9 +1198,10 @@ static void session_free(ezgrpc2_session_t *ezsession) {
   while ((ezstream = ezgrpc2_list_pop_front(ezsession->lstreams)) != NULL)
     stream_free(ezstream);
 
-  memset(ezsession->session_uuid, 0, sizeof(ezsession->session_uuid));
+  ezgrpc2_session_uuid_free(ezsession->session_uuid);
+  ezsession->session_uuid = NULL;
 
-  *(char*)ezsession = 0;
+  memset(ezsession, 0, sizeof(*ezsession));
 }
 
 
@@ -1203,11 +1213,10 @@ static void session_free(ezgrpc2_session_t *ezsession) {
 
 static ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid_t *session_uuid) {
   for (size_t i = 0; i < nb_ezsessions; i++)
-    if (!memcmp(ezsessions[i].session_uuid, session_uuid, UUID_STR_LEN))
+    if (ezgrpc2_session_uuid_eq(ezsessions[i].session_uuid, session_uuid))
       return ezsessions + i;
 
   return NULL;
-
 }
 
 
@@ -1307,9 +1316,7 @@ static int session_create(
   }
   /*  all seems to be successful. set the following */
   ezsession->lstreams = ezgrpc2_list_new(NULL);
-  uuid_t uuid;
-  uuid_generate_random(uuid);
-  uuid_unparse_lower(uuid, ezsession->session_uuid);
+  ezsession->session_uuid = ezgrpc2_session_uuid_new(NULL);
   //ezsession->alive = 1;
 
   return res;
@@ -1742,11 +1749,6 @@ int ezgrpc2_session_end_stream(
 
 
 
-ezgrpc2_session_uuid_t *ezgrpc2_session_uuid_copy(ezgrpc2_session_uuid_t *session_uuid) {
-  void *ret = malloc(UUID_STR_LEN);
-  memcpy(ret, session_uuid, UUID_STR_LEN);
-  return ret;
-}
 
 int ezgrpc2_session_end_session(
   ezgrpc2_server_t *ezserver,

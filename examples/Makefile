@@ -3,8 +3,6 @@
 CFLAGS += -I../src
 LDFLAGS += -L../src -l:libezgrpc2.a -lnghttp2 -luuid -lpthread 
 
-CFLAGS += $(EXTRACFLAGS)
-
 targets = hello_worldc.bin
 
 all : $(targets)
@@ -12,7 +10,7 @@ all : $(targets)
 clean :
 	rm $(targets)
 
-%c.bin : %c.o
+%c.bin : %c.o ../src/libezgrpc2.a
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 %c.o : %c.c

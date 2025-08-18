@@ -192,6 +192,9 @@ void ezgrpc2_pthpool_stop_and_join(ezgrpc2_pthpool_t *pool) {
     pthread_join(pool->threads[i], NULL);
 
 }
+void ezgrpc2_pthpool_result_free(ezgrpc2_pthpool_result_t *result) {
+  free(result);
+}
 
 void ezgrpc2_pthpool_free(ezgrpc2_pthpool_t *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));

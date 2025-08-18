@@ -8,7 +8,11 @@
 #endif
 
 #include <stdint.h>
+#include "common.h"
+
 #include "ezgrpc2_list.h"
+#include "ezgrpc2_event.h"
+#include "ezgrpc2_session_uuid.h"
 
 #ifdef _WIN32
 #  include <winsock2.h>
@@ -19,18 +23,6 @@
 //#define EZGRPC2_SESSION_UUID_LEN 37
 
 
-typedef char i8;
-typedef uint8_t u8;
-typedef int8_t s8;
-
-typedef int16_t i16;
-typedef uint16_t u16;
-
-typedef int32_t i32;
-typedef uint32_t u32;
-
-typedef int64_t i64;
-typedef uint64_t u64;
 
 typedef enum ezgrpc2_status_t ezgrpc2_status_t;
 /**
@@ -58,26 +50,18 @@ enum ezgrpc2_status_t {
 };
 
 
-typedef enum ezgrpc2_event_type_t ezgrpc2_event_type_t;
-/**
- * Types of events 
- */
-enum ezgrpc2_event_type_t {
-  EZGRPC2_EVENT_MESSAGE,
-  EZGRPC2_EVENT_CANCEL,
-  EZGRPC2_EVENT_DATALOSS
-};
-
 
 typedef struct ezgrpc2_server_t ezgrpc2_server_t;
+typedef struct ezgrpc2_header_t ezgrpc2_header_t;
+typedef struct ezgrpc2_message_t ezgrpc2_message_t;
+typedef struct ezgrpc2_path_t ezgrpc2_path_t;
+
 /**
  * An opaque server context struct type returned by :c:func:`ezgrpc2_server_init()`.
  */
 struct ezgrpc2_server_t;
 
-typedef void ezgrpc2_session_uuid_t;
 
-typedef struct ezgrpc2_header_t ezgrpc2_header_t;
 /**
  *
  */
@@ -88,69 +72,10 @@ struct ezgrpc2_header_t {
   size_t vlen;
 };
 
-typedef struct ezgrpc2_event_cancel_t ezgrpc2_event_cancel_t;
-/**
- *
- */
-struct ezgrpc2_event_cancel_t {
-  i32 stream_id;
-};
-
-typedef struct ezgrpc2_event_message_t ezgrpc2_event_message_t;
-/**
- *
- */
-struct ezgrpc2_event_message_t {
-  char end_stream;
-  i32 stream_id;
-  /* Cast the return of :c:func:`ezgrpc2_list_popb` to a pointer to
-   * :c:struct:`ezgrpc2_message_t`
-   * */
-  ezgrpc2_list_t *lmessages;
-};
-
-typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;
-/**
- *
- */
-struct ezgrpc2_event_dataloss_t {
-  /* cast ezgrpc2_list_popb to ``ezgrpc2_message_t *`` */
-  i32 stream_id;
-};
-
-typedef struct ezgrpc2_event_t ezgrpc2_event_t;
-/**
- * This is the events stored in :c:member:`ezgrpc2_path_t.levents`.
- */
-struct ezgrpc2_event_t {
-
-  ezgrpc2_session_uuid_t *session_uuid;
-
-  ezgrpc2_event_type_t type;
-
-  /**
-   * Anonymous union
-   */
-  union {
-    /**
-     * When :c:member:`ezgrpc2_event_t.type` is :c:enumerator:`EZGRPC2_EVENT_MESSAGE`.
-     */
-    ezgrpc2_event_message_t message;
-    /**
-     * When :c:member:`ezgrpc2_event_t.type` is :c:enumerator:`EZGRPC2_EVENT_DATALOSS`.
-     */
-    ezgrpc2_event_dataloss_t dataloss;
-    /**
-     * When :c:member:`ezgrpc2_event_t.type` is :c:enumerator:`EZGRPC2_EVENT_CANCEL`.
-     */
-    ezgrpc2_event_cancel_t cancel;
-  };
-};
 
 /**
  * A path to poll. To be passed to :c:func:`ezgrpc2_server_poll()`.
  */
-typedef struct ezgrpc2_path_t ezgrpc2_path_t;
 struct ezgrpc2_path_t {
   /**
    * Path to listen to. Must not contain an anchor or a query (# or ?)
@@ -172,7 +97,6 @@ struct ezgrpc2_path_t {
 };
 
 
-typedef struct ezgrpc2_message_t ezgrpc2_message_t;
 /**
  * A gRPC message
  */
@@ -352,7 +276,6 @@ int ezgrpc2_session_find_header(
   i32 stream_id,
   ezgrpc2_header_t *ezheader);
 
-ezgrpc2_session_uuid_t *ezgrpc2_session_uuid_copy(ezgrpc2_session_uuid_t *session_uuid);
 
 #ifdef __cplusplus
 }

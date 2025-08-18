@@ -22,7 +22,7 @@ struct userdata_t {
   i32 stream_id;
   ezgrpc2_session_uuid_t *session_uuid;
   char end_stream;
-  int status;
+  ezgrpc2_status_t status;
 
   /* input messages. requested by the client */
   ezgrpc2_list_t *limessages;
@@ -38,7 +38,7 @@ struct path_userdata_t {
 
 
 struct userdata_t *create_userdata(ezgrpc2_session_uuid_t *session_uuid, int32_t stream_id,
-    ezgrpc2_list_t *lmessages, char end_stream, int status) {
+    ezgrpc2_list_t *lmessages, char end_stream, ezgrpc2_status_t status) {
   struct userdata_t *data = malloc(sizeof(*data));
   data->session_uuid = ezgrpc2_session_uuid_copy(session_uuid);
   data->stream_id = stream_id;
@@ -48,13 +48,23 @@ struct userdata_t *create_userdata(ezgrpc2_session_uuid_t *session_uuid, int32_t
   return data;
 }
 
+void free_lmessages(ezgrpc2_list_t *lmessages){
+  ezgrpc2_message_t *msg;
+  while ((msg = ezgrpc2_list_pop_front(lmessages)) != NULL) {
+    free(msg->data);
+    free(msg);
+  }
+  ezgrpc2_list_free(lmessages);
+}
+
 _Atomic int pp = 0;
 /* No ezgrpc2_* functions must be called in this callback */
 void *callback_path0(void *data){
   printf("task executed path0!!\n");
   struct userdata_t *userdata = data;
   userdata->lomessages = ezgrpc2_list_new(NULL);
-  if (userdata->status)
+  /* if client did not request properly, skipp processing. */
+  if (userdata->status != EZGRPC2_STATUS_OK)
     return userdata;
 
   /* pretend this is our response (output messages) */
@@ -68,16 +78,9 @@ void *callback_path0(void *data){
     ezgrpc2_list_push_back(userdata->lomessages, msg);
   }
 
-
   /* cleanup (input messages) */
-  ezgrpc2_list_t *limessages = userdata->limessages;
-  {
-    ezgrpc2_message_t *msg;
-    while ((msg = ezgrpc2_list_pop_front(limessages)) != NULL) {
-      free(msg->data);
-      free(msg);
-    }
-  }
+  free_lmessages(userdata->limessages);
+  userdata->limessages = NULL;
 
   return data;
 }
@@ -87,7 +90,8 @@ void *callback_path1(void *data){
   printf("task executed path1!!\n");
   struct userdata_t *userdata = data;
   userdata->lomessages = ezgrpc2_list_new(NULL);
-  if (userdata->status)
+  /* if client did not request properly, skipp processing. */
+  if (userdata->status != EZGRPC2_STATUS_OK)
     return userdata;
 
   /* pretend this is our response (output messages) */
@@ -103,29 +107,87 @@ void *callback_path1(void *data){
 
 
   /* cleanup (input messages) */
-  ezgrpc2_list_t *limessages = userdata->limessages;
-  {
-    ezgrpc2_message_t *msg;
-    while ((msg = ezgrpc2_list_pop_front(limessages)) != NULL) {
-      free(msg->data);
-      free(msg);
-    }
-  }
-
+  free_lmessages(userdata->limessages);
+  userdata->limessages = NULL;
   return data;
 }
 
-void free_lmessages(ezgrpc2_list_t *lmessages){
-  ezgrpc2_message_t *msg;
-  while ((msg = ezgrpc2_list_pop_front(lmessages)) != NULL) {
-    free(msg->data);
-    free(msg);
+
+static void handle_event_message(ezgrpc2_event_t *event,
+                                 struct path_userdata_t *path_userdata,
+                                 ezgrpc2_server_t *server,
+                                 ezgrpc2_pthpool_t *opool,
+                                 ezgrpc2_pthpool_t *upool) {
+  size_t nb_msg = ezgrpc2_list_count(event->message.lmessages);
+  printf("stream_id %d, event message. nb_message %zu. end stream %d\n", event->message.stream_id,
+         nb_msg, event->message.end_stream);
+
+  if (path_userdata->is_unary) {
+    if (event->message.end_stream == 0 || nb_msg != 1) {
+      /* This is unary service, but they are sending more than one message */
+      ezgrpc2_session_end_stream(server, event->session_uuid,
+                                 event->message.stream_id,
+                                 EZGRPC2_STATUS_INVALID_ARGUMENT);
+      free_lmessages(event->message.lmessages);
+      return;
+    }
   }
-  ezgrpc2_list_free(lmessages);
+#if 1
+  struct userdata_t *data = create_userdata(
+      event->session_uuid, event->message.stream_id, event->message.lmessages,
+      event->message.end_stream, 0 /* status ok */);
+  /* we've taken ownership of this. clear */
+   event->message.lmessages = NULL;
+
+  /* if path/service is unary, add task to upool, else add to opool */
+  if (path_userdata->is_unary)
+    ezgrpc2_pthpool_add_task(upool, path_userdata->callback, data, NULL, NULL);
+  else
+    ezgrpc2_pthpool_add_task(opool, path_userdata->callback, data, NULL, NULL);
+#else
+  ezgrpc2_session_end_session(server, event->session_uuid, 0, 0);
+#endif
 }
 
-static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_t nb_paths,
-    ezgrpc2_pthpool_t *opool, ezgrpc2_pthpool_t *upool) {
+static void handle_event_dataloss(ezgrpc2_event_t *event,
+                                 struct path_userdata_t *path_userdata,
+                                 ezgrpc2_server_t *server,
+                                 ezgrpc2_pthpool_t *opool,
+                                 ezgrpc2_pthpool_t *upool) {
+  printf("stream_id %d, event dataloss\n", event->dataloss.stream_id);
+  /* Client ended the stream with a truncated gRPC message.
+   *
+   * If previously, we got a EZGRPC2_EVENT_MESSAGE in this stream id,
+   * that messages are valid. But event->message.end_stream is not set.
+   *
+   * In place of that, we'll be receving a EZGRPC2_EVENT_DATALOSS.
+   *
+   * You can handle this the same as EZGRPC2_EVENT_MESSAGE except
+   * there are no messages to process.
+   *
+   * We will not be getting a EZGRPC2_EVENT_MESSAGE with end stream in
+   * this stream. This is the last.
+   */
+
+  /* You may also send a status "EZGRPC2_STATUS_DATA_LOSS", when the
+   * message failed to be deserialized.
+   */
+  struct userdata_t *data = create_userdata(event->session_uuid, event->dataloss.stream_id,
+                         ezgrpc2_list_new(NULL), 1,
+                         EZGRPC2_STATUS_DATA_LOSS);
+
+  if (path_userdata->is_unary)
+    ezgrpc2_pthpool_add_task(upool, path_userdata->callback, data, NULL,
+                             NULL);
+  else
+    ezgrpc2_pthpool_add_task(opool, path_userdata->callback, data, NULL,
+                             NULL);
+
+}
+
+static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths,
+                          size_t nb_paths, ezgrpc2_pthpool_t *opool,
+                          ezgrpc2_pthpool_t *upool) {
   ezgrpc2_event_t *event;
   struct userdata_t *data = NULL;
   struct path_userdata_t *path_userdata = NULL;
@@ -133,75 +195,19 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths, size_
   for (size_t i = 0; i < nb_paths; i++) {
     path_userdata = paths[i].userdata;
     while ((event = ezgrpc2_list_pop_front(paths[i].levents)) != NULL) {
-      switch(event->type) {
-        case EZGRPC2_EVENT_MESSAGE: {
-          size_t nb_msg = ezgrpc2_list_count(event->message.lmessages);
-          printf("id %d, event message %zu end stream %d\n", event->message.stream_id, nb_msg, event->message.end_stream);
-
-          if (path_userdata->is_unary) {
-            if (event->message.end_stream == 0 || nb_msg != 1) {
-              /* This is unary service, but they are sending more than one message */
-              ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_STATUS_INVALID_ARGUMENT);
-
-              free_lmessages(event->message.lmessages);
-              break;
-            }
-          }
-#if 1
-          data = create_userdata(
-              event->session_uuid, event->message.stream_id,
-              event->message.lmessages,
-              event->message.end_stream, 0 /* status ok */);
-          /* we've taken ownership of this. clear */
-          event->message.lmessages = ezgrpc2_list_new(NULL);
-
-          /* add task to pool */
-          /* if path/service is unary, add task to upool, else add to opool */
-          if (path_userdata->is_unary)
-            ezgrpc2_pthpool_add_task(upool, path_userdata->callback, data, NULL, NULL);
-          else
-            ezgrpc2_pthpool_add_task(opool, path_userdata->callback, data, NULL, NULL);
-#else
-          ezgrpc2_session_end_session(server, event->session_uuid, 0, 0);
-#endif
-        } break;
-        case EZGRPC2_EVENT_DATALOSS:
-          printf("id %d, event dataloss\n", event->dataloss.stream_id);
-          /* Client ended the stream with a truncated gRPC message.
-           *
-           * If previously, we got a EZGRPC2_EVENT_MESSAGE in this stream id,
-           * that messages are valid. But event->message.end_stream is not set.
-           *
-           * In place of that, we'll be receving a EZGRPC2_EVENT_DATALOSS.
-           *
-           * You can handle this the same as EZGRPC2_EVENT_MESSAGE except
-           * there are no messages to process.
-           *
-           * We will not be getting a EZGRPC2_EVENT_MESSAGE with end stream in this
-           * stream. This is the last.
-           */
-
-
-          /* You may also send a status "EZGRPC2_STATUS_DATA_LOSS", when the message
-           * failed to be deserialized.
-           */
-          data = create_userdata(
-              event->session_uuid, event->dataloss.stream_id,
-              ezgrpc2_list_new(NULL),
-              1, EZGRPC2_STATUS_DATA_LOSS);
-
-          if (path_userdata->is_unary)
-            ezgrpc2_pthpool_add_task(upool, path_userdata->callback, data, NULL, NULL);
-          else
-            ezgrpc2_pthpool_add_task(opool, path_userdata->callback, data, NULL, NULL);
-
-          break;
-        case EZGRPC2_EVENT_CANCEL:
-          printf("event cancel on stread %d\n\n", event->cancel.stream_id);
-          // FIXME: HANDLE ME
-          break;
+      switch (event->type) {
+      case EZGRPC2_EVENT_MESSAGE:
+        handle_event_message(event, path_userdata, server, opool, upool);
+        break;
+      case EZGRPC2_EVENT_DATALOSS:
+        handle_event_dataloss(event, path_userdata, server, opool, upool);
+        break;
+      case EZGRPC2_EVENT_CANCEL:
+        printf("event cancel on stread %d\n\n", event->cancel.stream_id);
+        // FIXME: HANDLE ME
+        break;
       } /* switch */
-      free(event);
+      ezgrpc2_event_free(event);
     } /* while() */
   } /* for() */
 }
@@ -210,18 +216,18 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
  ezgrpc2_list_t *lresults = ezgrpc2_list_new(NULL);
  /* retrieve any finished tasks */
  ezgrpc2_pthpool_poll(pool, lresults);
- ezgrpc2_pthpool_result_t *task;
- while ((task = ezgrpc2_list_pop_front(lresults)) != NULL) {
-   struct userdata_t *data = task->ret;
-   if (task->is_timeout) {
-     assert(task->ret == NULL);
+ ezgrpc2_pthpool_result_t *result;
+ while ((result = ezgrpc2_list_pop_front(lresults)) != NULL) {
+   struct userdata_t *data = result->ret;
+   if (result->is_timeout) {
      free_lmessages(data->limessages);
-     free(task->userdata);
+     free(result->userdata);
      /* when task has timeout, it is not executed so
       * task->ret is always NULL */
-     free(task->ret); // No effect
-     free(task);
-     free(data);
+     assert(result->ret == NULL);
+     free(result->ret); // No effect
+     ezgrpc2_pthpool_result_free(result);
+     free(data); // No effect
      continue;
    }
    /* ezgrpc2_session_send() will take ownership of list of messages if it succeeds,
@@ -230,6 +236,7 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
    switch (ezgrpc2_session_send(server, data->session_uuid, data->stream_id, data->lomessages)){
      case 0:
       /* ok */
+       free_lmessages(data->lomessages);
        if (data->end_stream)
          ezgrpc2_session_end_stream(server, data->session_uuid, data->stream_id, data->status);
        break;
@@ -247,9 +254,9 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
      default:
        assert(0);
    } /* switch */
-   free(data->session_uuid);
+   ezgrpc2_pthpool_result_free(result);
+   ezgrpc2_session_uuid_free(data->session_uuid);
    free(data);
-   free(task);
   } /* while() */
 }
 
