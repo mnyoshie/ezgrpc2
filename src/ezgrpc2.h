@@ -13,6 +13,7 @@
 #include "ezgrpc2_list.h"
 #include "ezgrpc2_event.h"
 #include "ezgrpc2_session_uuid.h"
+#include "ezgrpc2_message.h"
 
 #ifdef _WIN32
 #  include <winsock2.h>
@@ -53,11 +54,10 @@ enum ezgrpc2_status_t {
 
 typedef struct ezgrpc2_server_t ezgrpc2_server_t;
 typedef struct ezgrpc2_header_t ezgrpc2_header_t;
-typedef struct ezgrpc2_message_t ezgrpc2_message_t;
 typedef struct ezgrpc2_path_t ezgrpc2_path_t;
 
 /**
- * An opaque server context struct type returned by :c:func:`ezgrpc2_server_init()`.
+ * An opaque server context struct type returned by :c:func:`ezgrpc2_server_new()`.
  */
 struct ezgrpc2_server_t;
 
@@ -97,14 +97,6 @@ struct ezgrpc2_path_t {
 };
 
 
-/**
- * A gRPC message
- */
-struct ezgrpc2_message_t {
-  u8 is_compressed;
-  u32 len;
-  i8 *data;
-};
 
 
 
@@ -114,7 +106,7 @@ extern "C" {
 
 
 /**
- * The :c:func:`ezgrpc2_server_init()` function creates a ezserver context,
+ * The :c:func:`ezgrpc2_server_new()` function creates a ezserver context,
  * binding to the associated ``ipv4_addr`` and ``ipv6_addr`` if it's not
  * ``NULL``.
  *
@@ -132,10 +124,10 @@ extern "C" {
  *
  * .. code-block:: C
  *
- *    ezgrpc2_server_t *ezgrpc2_server_init("0.0.0.0", 8080, "::", 8080, 16, NULL);
+ *    ezgrpc2_server_t *ezgrpc2_server_new("0.0.0.0", 8080, "::", 8080, 16, NULL);
  *
  */
-ezgrpc2_server_t *ezgrpc2_server_init(
+ezgrpc2_server_t *ezgrpc2_server_new(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
   int backlog,
@@ -169,7 +161,7 @@ int ezgrpc2_server_poll(
   size_t nb_paths,
   int timeout);
 
-void ezgrpc2_server_destroy(
+void ezgrpc2_server_free(
   ezgrpc2_server_t *server);
 
 //int ezgrpc2_session_submit_response(ezgrpc2_session_t *ezsession, i32 stream_id, ezgrpc2_list_t *lmessages, int end_stream, int grpc_status);

@@ -1,5 +1,7 @@
 #ifndef EZGRPC2_COMMON_H
 #define EZGRPC2_COMMON_H
+#include <stdlib.h>
+
 typedef char i8;
 typedef uint8_t u8;
 typedef int8_t s8;
@@ -12,4 +14,12 @@ typedef uint32_t u32;
 
 typedef int64_t i64;
 typedef uint64_t u64;
+
+
+/* unaligned read unsigned 32 */
+static inline uint32_t uread_u32(void *p) {
+  uint32_t ret;
+  memcpy(&ret, p, 4);
+  return ret;
+}
 #endif
