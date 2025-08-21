@@ -32,8 +32,8 @@ struct ezgrpc2_event_cancel_t {
  *
  */
 struct ezgrpc2_event_message_t {
-  char end_stream;
   i32 stream_id;
+  char end_stream;
   /* Cast the return of :c:func:`ezgrpc2_list_popb` to a pointer to
    * :c:struct:`ezgrpc2_message_t`
    * */
@@ -76,6 +76,7 @@ struct ezgrpc2_event_t {
   };
 };
 
+#define ezgrpc2_event_new(a, b, c) ezgrpc2_event_new(a, b, c)
 ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...);
 void ezgrpc2_event_free(ezgrpc2_event_t *event);
 

@@ -2,7 +2,7 @@
 #include <uuid/uuid.h>
 #include "ezgrpc2_session_uuid.h"
 
-int ezgrpc2_session_uuid_eq(ezgrpc2_session_uuid_t *uuid1, ezgrpc2_session_uuid_t *uuid2) {
+int ezgrpc2_session_uuid_is_equal(ezgrpc2_session_uuid_t *uuid1, ezgrpc2_session_uuid_t *uuid2) {
   if (uuid1 == NULL || uuid2 == NULL)
     return 0;
   return !memcmp(uuid1, uuid2, UUID_STR_LEN);

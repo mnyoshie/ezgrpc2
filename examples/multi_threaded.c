@@ -18,6 +18,10 @@
 #include "ezgrpc2.h"
 #include "ezgrpc2_pthpool.h"
 
+#ifdef __unix__
+#include <pthread.h>
+#endif
+
 struct userdata_t {
   i32 stream_id;
   ezgrpc2_session_uuid_t *session_uuid;
@@ -71,9 +75,9 @@ void *callback_path0(void *data){
   for (int i = 0; i < 5; i++, pp++) {
     ezgrpc2_message_t *msg = malloc(sizeof(*msg));
     msg->is_compressed = 0;
-    msg->data = strdup("    Hello world from path0!!");
+    msg->data = (void*)strdup("    Hello world from path0!!");
     
-    msg->len = strlen(msg->data) + 1;
+    msg->len = strlen((char*)msg->data) + 1;
     *(uint32_t*)(msg->data) = pp;
     ezgrpc2_list_push_back(userdata->lomessages, msg);
   }
@@ -98,9 +102,9 @@ void *callback_path1(void *data){
   for (int i = 0; i < 5; i++, pp++) {
     ezgrpc2_message_t *msg = malloc(sizeof(*msg));
     msg->is_compressed = 0;
-    msg->data = strdup("    Hello world from path1!!");
+    msg->data = (void*)strdup("    Hello world from path1!!");
     
-    msg->len = strlen(msg->data) + 1;
+    msg->len = strlen((char*)msg->data) + 1;
     *(uint32_t*)(msg->data) = pp;
     ezgrpc2_list_push_back(userdata->lomessages, msg);
   }
@@ -224,10 +228,7 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
      free(result->userdata);
      /* when task has timeout, it is not executed so
       * task->ret is always NULL */
-     assert(result->ret == NULL);
-     free(result->ret); // No effect
      ezgrpc2_pthpool_result_free(result);
-     free(data); // No effect
      continue;
    }
    /* ezgrpc2_session_send() will take ownership of list of messages if it succeeds,
@@ -269,25 +270,67 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
 
 
 
+#ifdef __unix__
+_Atomic int sigterm_flag = 0;
+static void *signal_handler(void *data) {
+  sigset_t *sigset = data;
+  int sig, res;
+  while (1) {
+    res = sigwait(sigset, &sig);
+    if (res > 1) {
+      fprintf(stderr, "sigwait error\n");
+      abort();
+    }
+    if (sig & SIGTERM) {
+      sigterm_flag = 1;
+      write(0, "sigterm_flag set. waiting for next poll timeout\n", 48);
+    }
+  }
+}
+#endif
 
 int main() {
   int res;
   const size_t nb_paths = 2;
   ezgrpc2_path_t paths[nb_paths];
   struct path_userdata_t path_userdata[nb_paths];
+
+
 #ifdef __unix__
   /* In a real application, user must configure the server
    * to handle SIGTERM, and make sure to prevent these
    * signal from propagating through the main threads and
    * pool threads via pthread_sigmask(SIG_BLOCK, ...) for
    * the signal handler and pthread_sigmask(SIG_SETMASK, ...)
-   * for the rest. This is skipped.
+   * for the rest. 
    */
-  signal(SIGPIPE, SIG_IGN);
-#endif
+  sigset_t sigset;
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGTERM);
+  sigaddset(&sigset, SIGPIPE);
+  res = pthread_sigmask (SIG_BLOCK, &sigset, NULL);
+  if (res != 0) {
+    fprintf(stderr, "pthread_sigmask failed\n");
+    abort();
+  }
 
+  /* run our signal handler */
+  pthread_t sig_thread;
+  res = pthread_create(&sig_thread, NULL, signal_handler, &sigset);
+  if (res) {
+    fprintf(stderr, "pthread_create failed\n");
+    abort();
+  }
 
-
+  /* make sure the signals won't propagate through the
+   * main thread and worker threads
+   */
+  res = pthread_sigmask(SIG_SETMASK, &sigset, NULL);
+  if (res != 0) {
+    fprintf(stderr, "pthread_sigmask failed\n");
+    abort();
+  }
+#endif /* __unix__ */
 
 #ifdef HAVE_SECCOMP
 #define BLACKLIST(ctx, name)                                                   \
@@ -305,11 +348,8 @@ int main() {
   BLACKLIST(seccomp_ctx, fork);
   //BLACKLIST(seccomp_ctx, seccomp);
   seccomp_load(seccomp_ctx);
+#undef BLACKLIST
 #endif
-
-
-
-
 
   /* Tasks for unary requests (single message with end stream) */
   ezgrpc2_pthpool_t *unordered_pool = NULL;
@@ -326,7 +366,7 @@ int main() {
   assert(ordered_pool != NULL);
 
   /* The heart of this API */
-  ezgrpc2_server_t *server = ezgrpc2_server_init("0.0.0.0", 19009, "::", 19009, 16, NULL);
+  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL);
   assert(server != NULL);
 
 
@@ -379,6 +419,13 @@ int main() {
 
 
   while (1) {
+#ifdef __unix__
+    // if sigterm flag has been set by the signal handler, break the loop and kill
+    // server.
+    if (sigterm_flag)
+      break;
+
+#endif
     int is_pool_empty = ezgrpc2_pthpool_is_empty(unordered_pool) &&
                         ezgrpc2_pthpool_is_empty(ordered_pool);
 
@@ -386,13 +433,6 @@ int main() {
      * and wait a little longer.
      */
     int timeout = is_pool_empty ? 10000 : 10;
-
-#ifdef __unix__
-    // if sigterm flag has been set by the signal handler, break the loop and kill
-    // server.
-
-    /*   .... */
-#endif
     // step 1. server poll
     if ((res = ezgrpc2_server_poll(server, paths, nb_paths, timeout)) < 0)
       break;
@@ -416,7 +456,10 @@ int main() {
   }
 
 
-  ezgrpc2_server_destroy(server);
+  ezgrpc2_server_free(server);
+  /* we aee aure these are enpty because we did not poll at break */
+  ezgrpc2_list_free(paths[0].levents);
+  ezgrpc2_list_free(paths[1].levents);
   ezgrpc2_pthpool_free(ordered_pool);
   ezgrpc2_pthpool_free(unordered_pool);
 

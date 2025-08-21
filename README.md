@@ -1,6 +1,6 @@
 # EZgRPC2
 
-A single threaded, non-blocking, asynchronous, gRPC library in C.
+A single threaded, non-blocking, reentrant, gRPC library in C.
 
 This library doesn't necessarily makes the implementation of gRPC server easier, in fact,
 it makes it harder.
@@ -39,24 +39,22 @@ int main() {
   signal(SIGPIPE, SIG_IGN);
 #endif
 
-
   /* Tasks for unary requests (single message with end stream) */
-  pthpool_t *unordered_pool = NULL;
+  ezgrpc2_pthpool_t *unordered_pool = NULL;
   /* Tasks for streaming requests (multiple messages in a stream).
    * streaming rpc is generally slower than unary request since
    * the messages must be ordered and hence can't be parallelize */
-  pthpool_t *ordered_pool = NULL;
+  ezgrpc2_pthpool_t *ordered_pool = NULL;
 
-  /* be careful not to increase the workers too much or they might start
-   * fighting.
-   */
-  unordered_pool = pthpool_init(2, -1);
+  unordered_pool = ezgrpc2_pthpool_new(2, 0);
   assert(unordered_pool != NULL);
 
   /* worker must be one for an ordered execution */
-  ordered_pool = pthpool_init(1, -1);
+  ordered_pool = ezgrpc2_pthpool_new(1, 0);
   assert(ordered_pool != NULL);
-  ezgrpc2_server_t *server = ezgrpc2_server_init("0.0.0.0", 19009, "::", 19009, 16, NULL);
+
+  /* The heart of this API */
+  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL);
   assert(server != NULL);
 
 
@@ -66,8 +64,9 @@ int main() {
 
   paths[0].path = "/test.yourAPI/whatever_service1";
   paths[1].path = "/test.yourAPI/whatever_service2";
-  list_init(&paths[0].list_events);
-  list_init(&paths[1].list_events);
+
+  paths[0].levents = ezgrpc2_list_new(NULL);
+  paths[1].levents = ezgrpc2_list_new(NULL);
   /* we expect to receive one or more grpc message in a
    * single stream.
    * */
@@ -96,7 +95,7 @@ int main() {
   //  waiting to be executed among other requests.
   //  
   //  When the tasks has been executed, the result is added to the finished
-  //  queue, waiting to be pulled off with, `pthpool_poll()`. After that
+  //  queue, waiting to be pulled off with, `ezgrpc2_pthpool_poll()`. After that
   //  we can then send our results.
   //  
   //  So basically, we have a loop of:
@@ -108,8 +107,8 @@ int main() {
 
 
   while (1) {
-    int is_pool_empty = pthpool_is_empty(unordered_pool) &&
-                        pthpool_is_empty(ordered_pool);
+    int is_pool_empty = ezgrpc2_pthpool_is_empty(unordered_pool) &&
+                        ezgrpc2_pthpool_is_empty(ordered_pool);
 
     /* if thread pool is empty, maybe we can give our resources to the cpu
      * and wait a little longer.
@@ -127,6 +126,7 @@ int main() {
       break;
 
     if (res > 0) {
+      puts("incoming events");
       // step 2. Give the task to the thread pool
       handle_events(server, paths, nb_paths, ordered_pool, unordered_pool);
     }
@@ -143,14 +143,15 @@ int main() {
     printf("poll err\n");
   }
 
+  ezgrpc2_server_free(server);
+  ezgrpc2_list_free(paths[0].levents);
+  ezgrpc2_list_free(paths[1].levents);
+  ezgrpc2_pthpool_free(ordered_pool);
+  ezgrpc2_pthpool_free(unordered_pool);
 
-  ezgrpc2_server_destroy(server);
-  pthpool_destroy(ordered_pool);
-  pthpool_destroy(unordered_pool);
   return res;
 }
-
 ```
 
-see `https://github.com/mnyoshie/ezgrpc2/blob/master/examples/hello_worldc.c` for a complete
+see `https://github.com/mnyoshie/ezgrpc2/blob/master/examples` for a complete
 MWE server.

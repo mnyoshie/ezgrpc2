@@ -27,7 +27,6 @@ void ezgrpc2_event_free(ezgrpc2_event_t *event) {
 
   switch (event->type) {
   case EZGRPC2_EVENT_MESSAGE: {
-    /* im a fucking genius */
     ezgrpc2_message_t *message;
     if (event->message.lmessages != NULL)
       while ((message = ezgrpc2_list_pop_front(event->message.lmessages)) !=

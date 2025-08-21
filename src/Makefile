@@ -25,6 +25,7 @@ targets += libezgrpc2.a
 objects = ezgrpc2.o
 objects += ezgrpc2_event.o
 objects += ezgrpc2_list.o
+objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
 objects += ezgrpc2_session_uuid.o
 #targets += examples/hello_worldcpp.bin

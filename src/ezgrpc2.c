@@ -10,7 +10,7 @@
  *                      |___/
  *
  *
- * Copyright (c) 2023-2024 M. N. Yoshie & Al-buharie Amjari
+ * Copyright (c) 2023-2025 M. N. Yoshie & Al-buharie Amjari
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -379,12 +379,6 @@ void ezlog(i8 *fmt, ...) {
 }
 
 
-/* unaligned read unsigned 32 */
-static inline uint32_t uread_u32(void *p) {
-  uint32_t ret;
-  memcpy(&ret, p, 4);
-  return ret;
-}
 
 /* returns a value where a whole valid message is found
  * f the return value equals vec.len, then the message
@@ -975,11 +969,11 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     ezgrpc2_event_t *event = ezgrpc2_event_new(
       EZGRPC2_EVENT_MESSAGE,
       ezgrpc2_session_uuid_copy(ezsession->session_uuid),
-      (ezgrpc2_event_message_t) {
+      ((ezgrpc2_event_message_t) {
         .lmessages = lmessages,
         .end_stream = 1,
         .stream_id = frame->hd.stream_id,
-      }
+      })
     );
 
     ezgrpc2_list_push_back(ezstream->path->levents, event);
@@ -995,11 +989,11 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     ezgrpc2_event_t *event = ezgrpc2_event_new(
       EZGRPC2_EVENT_MESSAGE,
       ezgrpc2_session_uuid_copy(ezsession->session_uuid),
-      (ezgrpc2_event_message_t) {
+      ((ezgrpc2_event_message_t) {
         .lmessages = lmessages,
         .end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0,
         .stream_id = frame->hd.stream_id,
-      }
+      })
     );
 
     ezgrpc2_list_push_back(ezstream->path->levents, event);
@@ -1010,9 +1004,9 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     ezgrpc2_event_t *event = ezgrpc2_event_new(
       EZGRPC2_EVENT_DATALOSS,
       ezgrpc2_session_uuid_copy(ezsession->session_uuid),
-      (ezgrpc2_event_dataloss_t) {
+      ((ezgrpc2_event_dataloss_t) {
         .stream_id = ezstream->stream_id,
-      }
+      })
     );
   
     ezgrpc2_list_push_back(ezstream->path->levents, event);
@@ -1213,7 +1207,7 @@ static void session_free(ezgrpc2_session_t *ezsession) {
 
 static ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid_t *session_uuid) {
   for (size_t i = 0; i < nb_ezsessions; i++)
-    if (ezgrpc2_session_uuid_eq(ezsessions[i].session_uuid, session_uuid))
+    if (ezgrpc2_session_uuid_is_equal(ezsessions[i].session_uuid, session_uuid))
       return ezsessions + i;
 
   return NULL;
@@ -1419,7 +1413,7 @@ static int session_events(ezgrpc2_session_t *ezsession) {
 | API FUNCTIONS: You will only have to care about these |
 `------------------------------------------------------*/
 
-void ezgrpc2_server_destroy(
+void ezgrpc2_server_free(
   ezgrpc2_server_t *s) {
   for (EZNFDS i = 0; i < 2; i++)
   {
@@ -1452,7 +1446,7 @@ void ezgrpc2_server_destroy(
 
 
 
-ezgrpc2_server_t *ezgrpc2_server_init(
+ezgrpc2_server_t *ezgrpc2_server_new(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
   int backlog,
@@ -1607,7 +1601,7 @@ ezgrpc2_server_t *ezgrpc2_server_init(
   return server;
 
 err:
-  ezgrpc2_server_destroy(server);
+  ezgrpc2_server_free(server);
   return NULL;
 }
 
@@ -1731,12 +1725,12 @@ int ezgrpc2_session_end_stream(
       {(void *)"grpc-message", (void *)grpc_message, 12,
        strlen(grpc_message)},
   };
-  atlog("trailer submitted\n");
   if (!ezgrpc2_list_is_empty(ezstream->lqueue_omessages)) {
-    atlog(COLSTR("messages are still queued\n", BHRED));
+    atlog(COLSTR("ending stream but messages are still queued\n", BHRED));
 
   }
   nghttp2_submit_trailer(ezsession->ngsession, stream_id, trailers, 2);
+  atlog("trailer submitted\n");
   nghttp2_session_send(ezsession->ngsession);
   return 0;
 }
