@@ -1,6 +1,6 @@
 # EZgRPC2
 
-A single threaded, non-blocking, reentrant, gRPC library in C.
+A single threaded, non-blocking, asynchronous, gRPC library in C.
 
 This library doesn't necessarily makes the implementation of gRPC server easier, in fact,
 it makes it harder.
@@ -13,145 +13,147 @@ serialize, deserialize your own messages.
 
 To be determine.
 
-# Architecture
+## Architecture
+
 
 This architecture was inspired by `poll(2)`, but instead of polling fds and returning events
 such as POLLIN, you poll a lists of paths and it gives events of `EVENT_MESSAGE`,
 `EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids.
 
-Pseudocode:
+## Building
 
+Use good'ol make:
+```
+make
+```
 
-``` 
-int main() {
-  int res;
-  const size_t nb_paths = 2;
-  ezgrpc2_path_t paths[nb_paths];
-  struct path_userdata_t path_userdata[nb_paths];
-#ifdef __unix__
-  /* In a real application, user must configure the server
-   * to handle SIGTERM, and make sure to prevent these
-   * signal from propagating through the main threads and
-   * pool threads via pthread_sigmask(SIG_BLOCK, ...) for
-   * the signal handler and pthread_sigmask(SIG_SETMASK, ...)
-   * for the rest. This is skipped.
-   */
-  signal(SIGPIPE, SIG_IGN);
-#endif
+## Usage
 
-  /* Tasks for unary requests (single message with end stream) */
-  ezgrpc2_pthpool_t *unordered_pool = NULL;
-  /* Tasks for streaming requests (multiple messages in a stream).
-   * streaming rpc is generally slower than unary request since
-   * the messages must be ordered and hence can't be parallelize */
-  ezgrpc2_pthpool_t *ordered_pool = NULL;
+Creating a server:
+```
+char *ipv4 = "0.0.0.0";
+uint16_t port = 19009;
+int backlog = 16;
+ezgrpc2_server_t *server = ezgrpc2_server_new(ipv4, port, NULL, 0, backlog, NULL);
+```
 
-  unordered_pool = ezgrpc2_pthpool_new(2, 0);
-  assert(unordered_pool != NULL);
+Setting up service:
+```
+const int nb_paths = 1;
+ezgrpc2_path_t paths[nb_paths];
+paths[0].paths = "/test.yourAPI/whatever_service";
+paths[0].levents = ezgrpc2_list_new(NULL);
+```
 
-  /* worker must be one for an ordered execution */
-  ordered_pool = ezgrpc2_pthpool_new(1, 0);
-  assert(ordered_pool != NULL);
+Polling for events:
+```
+int timeout = 100;
+int res = ezgrpc2_server_poll(server, paths, nb_paths, timeout);
+```
 
-  /* The heart of this API */
-  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL);
-  assert(server != NULL);
-
-
-  /*-----------------------------.
-  | What services do we provide? |
-  `-----------------------------*/
-
-  paths[0].path = "/test.yourAPI/whatever_service1";
-  paths[1].path = "/test.yourAPI/whatever_service2";
-
-  paths[0].levents = ezgrpc2_list_new(NULL);
-  paths[1].levents = ezgrpc2_list_new(NULL);
-  /* we expect to receive one or more grpc message in a
-   * single stream.
-   * */
-  path_userdata[0].is_unary = 0;
-  path_userdata[0].callback = callback_path0;
-  paths[0].userdata = path_userdata + 0;
-  /* we expect to receive only one grpc message in a
-   * single stream
-   */
-  path_userdata[1].is_unary = 1;
-  path_userdata[1].callback = callback_path1;
-  paths[1].userdata = path_userdata + 1;
-
-
-
-
-
-  //  gRPC allows clients to make concurent requests to a server in
-  //  a single connection by making use of stream ids in HTTP2.
-  //  
-  //  A gRPC request to a server, at it's bare minimum, must have a `path`
-  //  and one or more `grpc message`s.
-  //  
-  //  When a client makes a requests, that request is not necessarily immediately
-  //  executed, instead, the request is added to the queue in the thread pool,
-  //  waiting to be executed among other requests.
-  //  
-  //  When the tasks has been executed, the result is added to the finished
-  //  queue, waiting to be pulled off with, `ezgrpc2_pthpool_poll()`. After that
-  //  we can then send our results.
-  //  
-  //  So basically, we have a loop of:
-  //  
-  //    1. Get server events. (server poll)
-  //    2. Add tasks to the thread pool. (give the task to thread pool).
-  //    3. Get finish tasks from the thread pool (thread pool poll)
-  //    4. Send the results. (give the result to the client)
-
-
-  while (1) {
-    int is_pool_empty = ezgrpc2_pthpool_is_empty(unordered_pool) &&
-                        ezgrpc2_pthpool_is_empty(ordered_pool);
-
-    /* if thread pool is empty, maybe we can give our resources to the cpu
-     * and wait a little longer.
-     */
-    int timeout = is_pool_empty ? 10000 : 10;
-
-#ifdef __unix__
-    // if sigterm flag has been set by the signal handler, break the loop and kill
-    // server.
-
-    /*   .... */
-#endif
-    // step 1. server poll
-    if ((res = ezgrpc2_server_poll(server, paths, nb_paths, timeout)) < 0)
+Handle events:
+```
+if (res > 0) {
+  ezgrpc2_event_t *event;
+  while ((event = ezgrpc2_list_pop_front(paths[0].levents)) != NULL) {
+    switch (event->type) {
+    case EZGRPC2_EVENT_MESSAGE: {
+      printf("event message on stream id %d\n", event->message.stream_id);
+      ezgrpc2_message_t *message;
+      while ((message = ezgrpc2_list_pop_front(event->message.lmessages)) != NULL) {
+        printf("  message: compressed flag %d, len %zu, data %p\n", message->is_compressed, message->len, message->data);
+        ezgrpc2_message_free(message);
+      }
+      } break;
+    case EZGRPC2_EVENT_DATALOSS:
+      printf("event dataloss on stream id %d\n", event->cancel.stream_id);
       break;
-
-    if (res > 0) {
-      puts("incoming events");
-      // step 2. Give the task to the thread pool
-      handle_events(server, paths, nb_paths, ordered_pool, unordered_pool);
-    }
-    else if (res == 0) {
-      printf("no event\n");
-      // No server events, let's check the thread pool.
-    }
-    // step 3, 4 Get finish tasks and send results
-    handle_thread_pool(server, ordered_pool);
-    handle_thread_pool(server, unordered_pool);
+    case EZGRPC2_EVENT_CANCEL:
+      printf("event cancel on stream id %d\n", event->cancel.stream_id);
+      break;
+    } /* switch */
+    ezgrpc2_event_free(event);
   }
-
-  if (res < 0) {
-    printf("poll err\n");
-  }
-
-  ezgrpc2_server_free(server);
-  ezgrpc2_list_free(paths[0].levents);
-  ezgrpc2_list_free(paths[1].levents);
-  ezgrpc2_pthpool_free(ordered_pool);
-  ezgrpc2_pthpool_free(unordered_pool);
-
-  return res;
 }
+```
+
+Creating a message:
+```
+ezgrpc2_message_t *message = ezgrpc2_message_new(11);
+memcpy(message->data, "Hello mom!", 11);
+ezgrpc2_list_t *lmessages = ezgrpc2_list_new(NULL);
+ezgrpc2_list_push_back(list, message);
+```
+
+Sending a message:
+```
+ezgrpc2_session_send(server, event->session_uuid, event->message.stream_id, lmessages);
+```
+
+Ending stream:
+```
+ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_STATUS_OK);
 ```
 
 see `https://github.com/mnyoshie/ezgrpc2/blob/master/examples` for a complete
 MWE server.
+
+## License
+```
+ezgrpc2 - A grpc server without the extra fancy features.
+https://github.com/mnyoshie/ezgrpc2
+Copyright (c) 2023-2025 M. N. Yoshie
+Copyright (c) 2023-2025 Al-buharie Amjari <harieamjari@gmail.com>
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+  1. Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+
+  2. Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+“AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+--------------------------------------------------------------------
+wepoll - epoll for Windows
+https://github.com/piscisaureus/wepoll
+
+Copyright 2012-2020, Bert Belder <bertbelder@gmail.com>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```

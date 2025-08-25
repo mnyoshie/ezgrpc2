@@ -894,6 +894,8 @@ int ezgrpc2_session_find_header(
 
 const char *ezgrpc2_license(void){
   static const char *license = 
+    "ezgrpc2 - A grpc server without the extra fancy features.\n"
+    "https://github.com/mnyoshie/ezgrpc2\n"
     "Copyright (c) 2023-2025 M. N. Yoshie & Al-buharie Amjari\n"
     "\n"
     "Redistribution and use in source and binary forms, with or without\n"
@@ -917,6 +919,38 @@ const char *ezgrpc2_license(void){
     "PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF\n"
     "LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING\n"
     "NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
-    "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n";
+    "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
+#ifdef _WIN32
+    "\n"
+    "wepoll - epoll for Windows\n"
+    "https://github.com/piscisaureus/wepoll\n"
+    "\n"
+    "Copyright 2012-2020, Bert Belder <bertbelder@gmail.com>\n"
+    "All rights reserved.\n"
+    "\n"
+    "Redistribution and use in source and binary forms, with or without\n"
+    "modification, are permitted provided that the following conditions are\n"
+    "met:\n"
+    "\n"
+    "  * Redistributions of source code must retain the above copyright\n"
+    "    notice, this list of conditions and the following disclaimer.\n"
+    "\n"
+    "  * Redistributions in binary form must reproduce the above copyright\n"
+    "    notice, this list of conditions and the following disclaimer in the\n"
+    "    documentation and/or other materials provided with the distribution.\n"
+    "\n"
+    "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n"
+    "\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
+    "LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n"
+    "A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n"
+    "OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"
+    "SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT\n"
+    "LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,\n"
+    "DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY\n"
+    "THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n"
+    "(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\n"
+    "OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
+#endif
+    ;
   return license;
 }

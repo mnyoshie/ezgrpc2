@@ -25,6 +25,7 @@ ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uu
 void ezgrpc2_event_free(ezgrpc2_event_t *event) {
   if (event == NULL) return;
 
+  ezgrpc2_session_uuid_free(event->session_uuid);
   switch (event->type) {
   case EZGRPC2_EVENT_MESSAGE: {
     ezgrpc2_message_t *message;

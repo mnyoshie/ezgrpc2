@@ -6,9 +6,12 @@
 /* creates a ezstream and adds it to the linked list */
 __attribute__((visibility("hidden"))) ezgrpc2_stream_t *stream_new(i32 stream_id) {
   ezgrpc2_stream_t *ezstream = calloc(1, sizeof(*ezstream));
-  ezstream->stream_id = stream_id;
+  ezstream->lqueue_omessages = ezgrpc2_list_new(NULL);
   ezstream->lheaders = ezgrpc2_list_new(NULL);
-  assert(ezstream->lheaders != NULL);
+  ezstream->time = (uint64_t)time(NULL);
+  ezstream->is_trunc = 0;
+  ezstream->trunc_seek = 0;
+  ezstream->stream_id = stream_id;
   return ezstream;
 }
 /* only frees what is passed. it does not free all the linked lists */

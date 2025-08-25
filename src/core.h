@@ -15,6 +15,7 @@
 #  include <ws2tcpip.h>
 #  include <winsock2.h>
 #  include <windows.h>
+#  include "wepoll.h"
 
 #  define ssize_t int
 #  define SHUT_RDWR SD_BOTH
@@ -133,7 +134,7 @@ struct ezgrpc2_session_t {
    */
   ezgrpc2_server_settings_t server_settings;
 
-  size_t nb_open_streams;
+  //size_t nb_open_streams;
   /* the streams in a linked lists. allocated when we are
    * about to receive a HEADERS frame */
   ezgrpc2_list_t *lstreams;

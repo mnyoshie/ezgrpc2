@@ -27,8 +27,7 @@ struct path_userdata_t {
 void free_lmessages(ezgrpc2_list_t *lmessages){
   ezgrpc2_message_t *msg;
   while ((msg = ezgrpc2_list_pop_front(lmessages)) != NULL) {
-    free(msg->data);
-    free(msg);
+    ezgrpc2_message_free(msg);
   }
   ezgrpc2_list_free(lmessages);
 }
@@ -47,12 +46,11 @@ ezgrpc2_list_t *callback_path0(ezgrpc2_list_t *lmessages){
   /* if client did not request properly, skipp processing. */
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 2; i++, pp++) {
-    ezgrpc2_message_t *msg = malloc(sizeof(*msg));
+    ezgrpc2_message_t *msg = ezgrpc2_message_new(11);
     msg->is_compressed = 0;
-    msg->data = (void*)strdup("    path0!");
-    
-    msg->len = strlen((char*)msg->data) + 1;
+    memcpy(msg->data, "    path1!", 11);
     *(uint32_t*)(msg->data) = pp;
+    
     ezgrpc2_list_push_back(lmessages_ret, msg);
   }
 
@@ -61,14 +59,10 @@ ezgrpc2_list_t *callback_path0(ezgrpc2_list_t *lmessages){
 }
 ezgrpc2_list_t *callback_path1(ezgrpc2_list_t *lmessages){
   ezgrpc2_list_t *lmessages_ret = ezgrpc2_list_new(NULL);
-  /* if client did not request properly, skipp processing. */
-  /* pretend this is our response (output messages) */
   for (int i = 0; i < 2; i++, pp++) {
-    ezgrpc2_message_t *msg = malloc(sizeof(*msg));
+    ezgrpc2_message_t *msg = ezgrpc2_message_new(11);
     msg->is_compressed = 0;
-    msg->data = (void*)strdup("    path1!");
-    
-    msg->len = strlen((char*)msg->data) + 1;
+    memcpy(msg->data, "    path1!", 11);
     *(uint32_t*)(msg->data) = pp;
     ezgrpc2_list_push_back(lmessages_ret, msg);
   }
@@ -305,9 +299,5 @@ int main() {
   ezgrpc2_list_free(paths[0].levents);
   ezgrpc2_list_free(paths[1].levents);
 
-#ifdef HAVE_SECCOMP
-  seccomp_release(seccomp_ctx);
-seccomp_fail:
-#endif
   return res;
 }

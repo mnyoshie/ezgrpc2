@@ -27,12 +27,16 @@ objects += ezgrpc2_event.o
 objects += ezgrpc2_grpc_status.o
 objects += ezgrpc2_header.o
 objects += ezgrpc2_list.o
+objects += ezgrpc2_message.o
 objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
 objects += ezgrpc2_server_settings.o
 objects += ezgrpc2_session_uuid.o
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
+ifdef ($(OS),Windows_NT)
+  objects += wepoll.o
+endif
 #targets += examples/hello_worldcpp.bin
 
 all: $(targets)

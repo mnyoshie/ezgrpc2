@@ -198,27 +198,13 @@ static int on_begin_headers_callback(nghttp2_session *session,
                                      void *user_data) {
 
   ezgrpc2_session_t *ezsession = user_data;
-  ezgrpc2_stream_t *ezstream = calloc(1, sizeof(*ezstream));
-  if (ezstream == NULL) {
-#ifdef EZENABLE_DEBUG
-    atlog("stream id %d doesn't exist \n", frame->hd.stream_id);
-#endif
-    return NGHTTP2_ERR_CALLBACK_FAILURE;
-  }
+  ezgrpc2_stream_t *ezstream = stream_new(frame->hd.stream_id);
 
-  ezstream->lqueue_omessages = ezgrpc2_list_new(NULL);
-  ezstream->lheaders = ezgrpc2_list_new(NULL);
-
-  ezstream->time = (uint64_t)time(NULL);
-  ezstream->stream_id = frame->hd.stream_id;
   ezstream->recv_len = 0;
   ezstream->recv_data = malloc(ezsession->server_settings.initial_window_size);
 
-  ezstream->is_trunc = 0;
-  ezstream->trunc_seek = 0;
   ezgrpc2_list_push_back(ezsession->lstreams, ezstream);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id ,ezstream);
-  //ezsession->nb_open_streams++;
 
 #ifdef EZENABLE_DEBUG
   atlog("stream id %d \n",
