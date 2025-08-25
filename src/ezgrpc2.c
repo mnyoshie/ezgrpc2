@@ -52,55 +52,17 @@
 #include <openssl/rand.h>
 #include <nghttp2/nghttp2.h>
 
+
 #include "ezgrpc2_event.h"
+#include "ezgrpc2_server_settings.h"
+#include "ezgrpc2_server_settings_struct.h"
 
 
-//_Static_assert(UUID_STR_LEN == EZGRPC2_SESSION_UUID_LEN, "");
+#include "core.h"
 
-#include "ansicolors.h"
+#include "internal_nghttp2_callbacks.h"
+#include "internal_helpers.h"
 
-#ifdef _WIN32
-#  include <ws2tcpip.h>
-
-#  define ssize_t int
-#  define SHUT_RDWR SD_BOTH
-#  define POLLRDHUP 0
-
-static char *strndup(char *c, size_t n) {
-  size_t l;
-  for (l = 0; l < n && c[l];) l++;
-  char *r = calloc(1, l+1);
-  memcpy(r, c, l);
-  return r;
-}
-
-/* winsock send/recv returns int instead of ssize_t */
-#define EZSSIZE           int
-#define EZSOCKET          SOCKET
-#define EZPOLL            WSAPoll
-#define EZNFDS            ULONG
-#define EZINVALID_SOCKET  INVALID_SOCKET
-#define EZSOCKET_ERROR    SOCKET_ERROR
-#define EZSOCKLEN         int
-#else /* __unix__ */
-#  include <arpa/inet.h>
-#  include <byteswap.h>
-#  include <fcntl.h>
-#  include <netdb.h>
-#  include <poll.h>
-#  include <netinet/in.h>
-#  include <netinet/tcp.h>
-#  include <sys/socket.h>
-#  include <sys/types.h>
-
-#define EZSSIZE           ssize_t
-#define EZSOCKET          int
-#define EZPOLL            poll
-#define EZNFDS            nfds_t
-#define EZINVALID_SOCKET  (-1)
-#define EZSOCKET_ERROR    (-1)
-#define EZSOCKLEN         socklen_t
-#endif /* _WIN32/__unix__ */
 
 #define logging_fp stderr
 // int logging_level;
@@ -116,152 +78,7 @@ static char *strndup(char *c, size_t n) {
   ezlogf(ezsession, __FILE__, __LINE__, __VA_ARGS__)
 
 
-/* stores the values of a SETTINGS frame */
-typedef struct ezgrpc_settingsf_t ezgrpc_settingsf_t;
-struct ezgrpc_settingsf_t {
-  u32 header_table_size;
-  u32 enable_push;
-  u32 max_concurrent_streams;
-  u32 flow_control;
-  u32 max_frame_size;
-};
 
-
-typedef struct ezgrpc2_stream_t ezgrpc2_stream_t;
-struct ezgrpc2_stream_t {
-  i32 stream_id;
-
-  /* the time the stream is received by the server in
-   * unix epoch */
-  u64 time;
-  ezgrpc2_list_t *lheaders;
-
-  i8 is_method_post : 1;
-  i8 is_scheme_http : 1;
-  /* just a bool. if `te` is a trailer, or `te` does exists. */
-  i8 is_te_trailers : 1;
-  /* just a bool. if content type is application/grpc* */
-  i8 is_content_grpc : 1;
-
-  i8 is_trunc : 1;
-
-  /* stores `:path` */
-  ezgrpc2_path_t *path;
-
-  /* recv_data */
-  size_t recv_len;
-  u8 *recv_data;
-
-  size_t trunc_seek;
-  ezgrpc2_list_t *lqueue_omessages;
-
-
-};
-
-typedef struct ezgrpc2_session_t ezgrpc2_session_t;
-struct ezgrpc2_session_t {
-  //u8 session_id[32];
-//  char session_uuid[UUID_STR_LEN];
-  ezgrpc2_session_uuid_t *session_uuid;
-
-  EZSOCKET sockfd;
-  struct sockaddr_storage sockaddr;
-  EZSOCKLEN socklen;
-
-  nghttp2_session *ngsession;
-
-  /* an ASCII string */
-  char client_addr[64];
-  u16 client_port;
-
-  char *server_addr;
-  u16 *server_port;
-
-  size_t nb_paths;
-  ezgrpc2_path_t *paths;
-
-
-  /* settings requested by the client. to be set when a SETTINGS
-   * frame is received.
-   */
-  ezgrpc_settingsf_t csettings;
-
-  /* A pointer to the settings in ezgrpc2_server_t.settings
-   */
-  ezgrpc_settingsf_t *ssettings;
-
-  size_t nb_open_streams;
-  /* the streams in a linked lists. allocated when we are
-   * about to receive a HEADERS frame */
-  ezgrpc2_list_t *lstreams;
-
-  //int pfd[2];
-};
-
-/* This struct is private. Please use the auxilliary functions below it */
-struct ezgrpc2_server_t {
-  nghttp2_session *ngsession;
-  u16 ipv4_port;
-  u16 ipv6_port;
-
-  /* ASCII strings which represent where address to bind to */
-  char *ipv4_addr;
-  char *ipv6_addr;
-
-  EZNFDS nb_fds;
-
-  /* fds[0] reserve for ipv4 listen sockfd */
-  /* fds[1] reserve for ipv6 listen sockfd */
-  /* the rest are for client use */
-  struct pollfd *fds;
-
-  size_t nb_sessions;
-  ezgrpc2_session_t *sessions;
-
-
-  /* default server settings to be sent */
-  ezgrpc_settingsf_t settings;
-
-};
-
-i8 *ezgrpc2_status_strstatus(ezgrpc2_status_t status) {
-  switch (status) {
-    case EZGRPC2_STATUS_OK:
-      return "ok";
-    case EZGRPC2_STATUS_CANCELLED:
-      return "cancelled";
-    case EZGRPC2_STATUS_UNKNOWN:
-      return "unknown";
-    case EZGRPC2_STATUS_INVALID_ARGUMENT:
-      return "invalid argument";
-    case EZGRPC2_STATUS_DEADLINE_EXCEEDED:
-      return "deadline exceeded";
-    case EZGRPC2_STATUS_NOT_FOUND:
-      return "not found";
-    case EZGRPC2_STATUS_ALREADY_EXISTS:
-      return "already exists";
-    case EZGRPC2_STATUS_PERMISSION_DENIED:
-      return "permission denied";
-    case EZGRPC2_STATUS_UNAUTHENTICATED:
-      return "unauthenticated";
-    case EZGRPC2_STATUS_RESOURCE_EXHAUSTED:
-      return "resource exhausted";
-    case EZGRPC2_STATUS_FAILED_PRECONDITION:
-      return "failed precondition";
-    case EZGRPC2_STATUS_OUT_OF_RANGE:
-      return "out of range";
-    case EZGRPC2_STATUS_UNIMPLEMENTED:
-      return "unimplemented";
-    case EZGRPC2_STATUS_INTERNAL:
-      return "internal";
-    case EZGRPC2_STATUS_UNAVAILABLE:
-      return "unavailable";
-    case EZGRPC2_STATUS_DATA_LOSS:
-      return "data loss";
-    default:
-      return "(null)";
-  }
-}
 
 static void dump_decode_binary(i8 *data, size_t len) {
   i8 look_up[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
@@ -318,27 +135,6 @@ void ezdump(void *vdata, size_t len) {
   assert(len == cur);
 }
 
-
-static ezgrpc2_header_t *header_create(const u8 *name, size_t nlen, const u8 *value, size_t vlen) {
-  ezgrpc2_header_t *ezheader = malloc(sizeof(*ezheader));
-  if (ezheader == NULL)
-    return NULL;
-
-  ezheader->name = malloc(nlen);
-  ezheader->value = malloc(vlen);
-
-  memcpy(ezheader->name, name, nlen);
-  memcpy(ezheader->value, value, vlen);
-  ezheader->nlen = nlen;
-  ezheader->vlen = vlen;
-
-  return ezheader;
-}
-
-static void header_free(ezgrpc2_header_t *ezheader) {
-  free(ezheader->name);
-  free(ezheader->value);
-}
 
 
 
@@ -424,692 +220,14 @@ static size_t count_grpc_message(void *data, size_t len, int *nb_message) {
 }
 
 
-/* constructs a linked list from a prefixed-length message. */
-static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list_t *lmessages) {
-  i8 *wire = data;
 
-  size_t seek, last_seek = 0;
-  for (seek = 0; seek < len;) {
-    if (seek + 1 > len) {
-      atlog("exceeded compressed flag\n");
-      return last_seek;
-    }
-    i8 is_compressed = wire[seek];
-    seek += 1;
-
-    if (seek + 4 > len) {
-      atlog("exceeded length prefixed\n");
-      return last_seek;
-    }
-    u32 msg_len = ntohl(uread_u32(wire + seek));
-    seek += 4;
-    void *msg_data = wire + seek;
-
-    if (seek + msg_len <= len) {
-      last_seek = seek;
-      ezgrpc2_message_t *msg = calloc(1, sizeof(ezgrpc2_message_t));
-      assert(msg != NULL);
-
-      msg->is_compressed = is_compressed;
-      msg->len = msg_len;
-      msg->data = malloc(msg->len);
-      assert(msg->data != NULL);
-
-      memcpy(msg->data, msg_data, msg_len);
-      ezgrpc2_list_push_back(lmessages, msg);
-    }
-    seek += msg_len;
-  }
-
- // atlog("ok\n");
-  return last_seek;
-}
-
-static int ezgrpc2_list_cmp_ezstream_id(const void *data,const void *userdata) {
-  return ((ezgrpc2_stream_t*)data)->stream_id != *(i32*)userdata;
-}
-static int ezgrpc2_list_cmp_ezheader_name(const void *data, const void *userdata) {
+static int list_cmp_ezheader_name(const void *data, const void *userdata) {
   const ezgrpc2_header_t *a = data;
   const ezgrpc2_header_t *b = userdata;
   return a->nlen == b->nlen ?
       strncasecmp(a->name, b->name,
         a->nlen & b->nlen): 1;
 }
-
-/* creates a ezstream and adds it to the linked list */
-
-/* only frees what is passed. it does not free all the linked lists */
-static void stream_free(ezgrpc2_stream_t *ezstream) {
-  atlog("stream %d freed\n", ezstream->stream_id);
-  ezgrpc2_header_t *ezheader;
-
-  while ((ezheader = ezgrpc2_list_pop_front(ezstream->lheaders)) != NULL) {
-    header_free(ezheader);
-  }
-  free(ezstream->recv_data);
-  ezgrpc2_list_free(ezstream->lheaders);
-  free(ezstream);
-}
-
-static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
-                                         i32 stream_id, u8 *buf, size_t buf_len,
-                                         u32 *data_flags,
-                                         nghttp2_data_source *source,
-                                         void *user_data) {
-  if (buf_len < 5) {
-    atlog(COLSTR("error buf_len < 5\n", BHRED));
-    return NGHTTP2_INTERNAL_ERROR;
-  }
-//  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
-//  assert(ezstream != NULL);
-  ezgrpc2_stream_t *ezstream = source->ptr;
-  ezgrpc2_list_t *lmessages = ezstream->lqueue_omessages;
-  ezgrpc2_message_t *msg;
-
-
-  size_t buf_seek = 0;
-  while (1) {
-    if ((msg = ezgrpc2_list_peek_front(lmessages)) == NULL) {
-      *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-      goto exit;
-    }
-    size_t rem;
-    if (ezstream->is_trunc) {
-      assert(buf_len >= buf_seek);
-      if ((rem = buf_len - buf_seek) == 0) {
-        /* buf is fully written */
-        goto exit;
-      }
-      assert(msg->len > ezstream->trunc_seek);
-      char is_fit = msg->len - ezstream->trunc_seek <= rem;
-      size_t to_write = is_fit ? msg->len - ezstream->trunc_seek :
-        rem;
-      memcpy(buf + buf_seek, msg->data + ezstream->trunc_seek, to_write);
-      buf_seek += to_write;
-
-      if (is_fit) {
-      /* the whole message can fit! */
-        (void)ezgrpc2_list_pop_front(lmessages);
-        ezstream->is_trunc = 0;
-        ezstream->trunc_seek = 0;
-        continue;
-      }
-      else /*if(msg->len > rem)*/ {
-        ezstream->trunc_seek += rem;
-        goto exit;
-      }
-    }
-    /* if we can fit 5 bytes or more to the buffer */
-    if (buf_seek + 5 <= buf_len)  {
-      buf[buf_seek++] = msg->is_compressed;
-      uint32_t len = htonl(msg->len);
-      memcpy(buf + buf_seek, &len, 4);
-      buf_seek += 4;
-      ezstream->is_trunc = 1;
-      ezstream->trunc_seek = 0;
-      continue;
-    }
-    break;
-  } 
-exit:
-  atlog("read done %d bytes\n", buf_seek);
- // *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-  return buf_seek;
-}
-
-#if 0
-static nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
-                                         i32 stream_id, u8 *buf, size_t length,
-                                         u32 *data_flags,
-                                         nghttp2_data_source *source,
-                                         void *user_data) {
-  atlog("called\n");
-  EZSSIZE s = read(source->fd, buf, length);
-  atlog("read done\n");
-  if (s < 0) {
-#ifdef _WIN32
-    if (WSAGetLastError() == WSAEWOULDBLOCK) {
-#else
-    if (errno == EWOULDBLOCK) {
-#endif
-      *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-      return 0;
-    }
-    atlog("pfd read err\n");
-    perror("read");
-    return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
-  }
-  else if (s == 0) {
-    *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-  }
-  atlog("read %zd bytes\n", s);
-  return s;
-  /*
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
-  ezgrpc2_list_t *lresponse = source->ptr;
-  if (lresponse == NULL) {
-    atlog("source->ptr null\n");
-    *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-    return 1;
-  }
-
-  ezgrpc2_response_t *ezresponse = ezgrpc2_list_peekb(lresponse);
-  if (ezresponse == NULL) {
-    *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-    return 0;
-  }
-
-  ezgrpc2_message_t *msg = ezgrpc2_list_popb(&ezresponse->lmessages);
-  if (msg != NULL) {
-    atlog("msg concat\n");
-    buf[0] = msg->is_compressed;
-    u32 len = htonl(msg->len);
-    memcpy(buf + 1, &len, 4);
-    memcpy(buf + 5, msg->data, msg->len);
-    free(msg->data);
-    *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
-    return 5 + msg->len;
-  }
-  atlog("eof\n");
-  free(ezgrpc2_list_popb(lresponse));
-  return 0;
-  */
-}
-#endif
-
-
-
-
-/* ----------- BEGIN NGHTTP2 CALLBACKS ------------------*/
-
-static nghttp2_ssize ngsend_callback(nghttp2_session *session, const u8 *data,
-                               size_t length, int flags, void *user_data) {
-  ezgrpc2_session_t *ezsession = user_data;
-
-  EZSSIZE ret = send(ezsession->sockfd, data, length, 0);
-  if (ret < 0) {
-    atlog("error %s\n", strerror(errno));
-    if (errno == EAGAIN || errno == EWOULDBLOCK) return NGHTTP2_ERR_WOULDBLOCK;
-
-    return NGHTTP2_ERR_CALLBACK_FAILURE;
-  }
-
-#ifdef EZENABLE_DEBUG
-  atlog("ok. read %zu bytes\n", ret);
-  //ezdump((void *)data, ret);
-#endif
-  return ret;
-}
-
-
-
-
-
-
-
-
-static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t length,
-                               int flags, void *user_data) {
-  ezgrpc2_session_t *ezsession = user_data;
-
-  EZSSIZE ret = recv(ezsession->sockfd, buf, length, 0);
-  if (ret == EZSOCKET_ERROR) {
-#ifdef _WIN32
-    int wsa;
-    switch ((wsa = WSAGetLastError())) {
-      case WSAEWOULDBLOCK:
-      case WSAEINTR:
-        return NGHTTP2_ERR_WOULDBLOCK;
-      default:
-        atlog("failure errno %d\n", wsa);
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-#else
-    switch (errno) {
-      case EWOULDBLOCK:
-        return NGHTTP2_ERR_WOULDBLOCK;
-      default:
-        atlog("failure: %s\n", strerror(errno));
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-#endif
-  }
-
-#ifdef EZENABLE_DEBUG
-  atlog("ok. read %zu bytes\n", ret);
-#endif
-  return ret;
-}
-
-
-
-
-
-
-
-/* we're beginning to receive a header; open up a memory for the new stream */
-static int on_begin_headers_callback(nghttp2_session *session,
-                                     const nghttp2_frame *frame,
-                                     void *user_data) {
-
-  ezgrpc2_session_t *ezsession = user_data;
-  ezgrpc2_stream_t *ezstream = calloc(1, sizeof(*ezstream));
-  if (ezstream == NULL) {
-#ifdef EZENABLE_DEBUG
-    atlog("stream id %d doesn't exist \n", frame->hd.stream_id);
-#endif
-    return NGHTTP2_ERR_CALLBACK_FAILURE;
-  }
-
-  ezstream->lqueue_omessages = ezgrpc2_list_new(NULL);
-  ezstream->lheaders = ezgrpc2_list_new(NULL);
-
-  ezstream->time = (uint64_t)time(NULL);
-  ezstream->stream_id = frame->hd.stream_id;
-  ezstream->recv_len = 0;
-  ezstream->recv_data = malloc(EZWINDOW_SIZE);
-
-  ezstream->is_trunc = 0;
-  ezstream->trunc_seek = 0;
-  ezgrpc2_list_push_back(ezsession->lstreams, ezstream);
-  nghttp2_session_set_stream_user_data(session, frame->hd.stream_id ,ezstream);
-  //ezsession->nb_open_streams++;
-
-#ifdef EZENABLE_DEBUG
-  atlog("stream id %d \n",
-         frame->hd.stream_id);
-#endif
-  return 0;
-}
-
-
-
-
-
-
-
-
-
-/* ok, here's the header name and value. this will be called from time to time
- */
-static int on_header_callback(nghttp2_session *session,
-                              const nghttp2_frame *frame, const u8 *name,
-                              size_t namelen, const u8 *value, size_t valuelen,
-                              u8 flags, void *user_data) {
-
-  (void)flags;
-  ezgrpc2_session_t *ezsession = user_data;
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, frame->hd.stream_id);
-
-  ezgrpc2_header_t *ezheader = header_create(name, namelen, value, valuelen);
-  assert(ezheader != NULL);
-  ezgrpc2_list_push_back(ezstream->lheaders, ezheader);
-
-  i8 *method = ":method";
-  i8 *scheme = ":scheme";
-  i8 *path = ":path";
-  /* clang-format off */
-#define EZSTRCMP(str1, str2) !(strlen(str1) == str2##len && !strcmp(str1, (void *)str2))
-  if (!EZSTRCMP(method, name))
-    ezstream->is_method_post = !EZSTRCMP("POST", value);
-  else if (!EZSTRCMP(scheme, name))
-    ezstream->is_scheme_http = !EZSTRCMP("http", value);
-  else if (!EZSTRCMP(path, name)) {
-    ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
-    if (ezstream == NULL) {
-      atlog("couldn't find stream %d\n", frame->hd.stream_id);
-      return 1;
-    }
-    for (size_t i = 0; i < ezsession->nb_paths; i++) 
-      if (!EZSTRCMP(ezsession->paths[i].path, value)) {
-        ezstream->path = &ezsession->paths[i];
-  #ifdef EZENABLE_DEBUG
-        atlog("found service %s\n", ezsession->paths[i].path);
-  #endif
-        break;
-      }
-    if (ezstream->path == NULL)
-      atlog("path not found %s\n", value);
-  }
-  else if (!EZSTRCMP("content-type", name)) {
-    int is_gt = valuelen >= 16;
-    ezstream->is_content_grpc = is_gt ? !strncmp("application/grpc", (void *)value, 16) : 0;
-  }
-  else if (!EZSTRCMP("te", name)) {
-    ezstream->is_te_trailers = !EZSTRCMP("trailers", value);
-  }
-  else {
-    ;
-  }
-#undef EZSTRCMP
-  /* clang-format on */
-
-#ifdef EZENABLE_DEBUG
-  atlog("header type: %d, %s: %.*s\n", frame->hd.type, name, (int)valuelen,
-         value);
-#endif
-
-  return 0;
-}
-
-
-
-
-
-
-
-
-
-
-static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nghttp2_frame *frame) {
-  if (!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) return 0;
-  /* if we've received an end stream in headers frame. send an RST. we
-   * expected a data */
-#if 0
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
-                              frame->hd.stream_id, 1);
-    return 0;
-  }
-#endif
- 
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, frame->hd.stream_id);
-     // (void*)&frame->hd.stream_id);
-  if (ezstream == NULL) {
-    atlog("stream %d not found. sending rst\n", frame->hd.stream_id);
-    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
-                              frame->hd.stream_id,
-                              1);  // XXX send appropriate code
-    return 0;
-  }
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && !ezstream->is_content_grpc) {
-    nghttp2_nv nva[1] =
-    {
-        {
-          .name = (void *)":status", .namelen= 7,
-          .value = (void *)"415", .valuelen= 3,
-          .flags=NGHTTP2_NV_FLAG_NONE
-        },
-    };
-    if (nghttp2_submit_headers(ezsession->ngsession, NGHTTP2_FLAG_END_STREAM,
-        ezstream->stream_id, NULL, nva, 1, NULL)){assert(0);}
-
-    return 0;
-  }
-
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-    atlog("received a header with an end stream. sending rst\n", frame->hd.stream_id);
-    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
-                              frame->hd.stream_id, 1);
-    return 0;
-  }
-
-  if (!(ezstream->is_method_post && ezstream->is_scheme_http &&
-        ezstream->is_te_trailers && ezstream->is_content_grpc)) {
-    atlog("not method_post %d && is_scheme_http %d && is_te_trailers %d && is_content_grpc %d. sending rst\n", ezstream->is_method_post, ezstream->is_scheme_http, ezstream->is_te_trailers, ezstream->is_content_grpc);
-    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
-                              ezstream->stream_id, 1);
-    return 0;
-  }
-  nghttp2_nv nva[2] =
-  {
-      {
-        .name = (void *)":status", .namelen= 7,
-        .value = (void *)"200", .valuelen= 3,
-        .flags=NGHTTP2_NV_FLAG_NONE
-      },
-      {
-        .name = (void *)"content-type", .namelen = 12,
-        .value = (void *)"application/grpc", .valuelen = 16,
-        .flags=NGHTTP2_NV_FLAG_NONE
-      },
-  };
-
-  if (nghttp2_submit_headers(ezsession->ngsession, 0, ezstream->stream_id, NULL, nva, 2,
-                           NULL)) {assert(0);}
-  if (ezstream->path == NULL) {
-    atlog("path null, submitting req\n");
-    int status = EZGRPC2_STATUS_UNIMPLEMENTED;
-    char grpc_status[32] = {0};
-    int len = snprintf(grpc_status, 31, "%d",(int) status);
-    i8 *grpc_message = ezgrpc2_status_strstatus(status);
-    nghttp2_nv trailers[] = {
-        {(void *)"grpc-status", (void *)grpc_status, 11, len},
-        {(void *)"grpc-message", (void *)grpc_message, 12,
-         strlen(grpc_message)},
-    };
-    nghttp2_submit_trailer(ezsession->ngsession, frame->hd.stream_id, trailers, 2);
-    atlog("trailer submitted\n");
-   // nghttp2_session_send(ezsession->ngsession);
-   // ezgrpc2_session_end_stream(ezsession, ezstream->stream_id, EZGRPC2_STATUS_UNIMPLEMENTED);
-    return 0;
-  }
-  atlog("ret id %d\n", frame->hd.stream_id);
-  return 0;
-}
-
-
-
-
-
-
-
-
-static inline int on_frame_recv_settings(ezgrpc2_session_t *ezsession, const nghttp2_frame *frame) {
-  if (frame->hd.stream_id != 0){
-    atlog("received a SETTINGS frame at stream_id 0. immediately returning\n");
-    return 0;
-  }
-
-  atlog("ack %d, length %zu\n", frame->settings.hd.flags,
-         frame->settings.hd.length);
-  if (!(frame->settings.hd.flags & NGHTTP2_FLAG_ACK)) {
-    // apply settings
-    for (size_t i = 0; i < frame->settings.niv; i++) {
-      switch (frame->settings.iv[i].settings_id) {
-        case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
-          ezsession->csettings.header_table_size =
-              frame->settings.iv[i].value;
-          break;
-        case NGHTTP2_SETTINGS_ENABLE_PUSH:
-          ezsession->csettings.enable_push = frame->settings.iv[i].value;
-          break;
-        case NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS:
-          ezsession->csettings.max_concurrent_streams =
-              frame->settings.iv[i].value;
-          break;
-        case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
-          ezsession->csettings.max_frame_size = frame->settings.iv[i].value;
-          // case NGHTTP2_SETTINGS_FLOW_CONTROL:
-          // ezstream->flow_control =  frame->settings.iv[i].value;
-          break;
-        default:
-          break;
-      };
-    }
-  } else if (frame->settings.hd.flags & NGHTTP2_FLAG_ACK &&
-             frame->settings.hd.length == 0) {
-    /* OK. The client acknowledge our settings. do nothing */
-  } else {
-    atlog("sent an rst\n", frame->hd.stream_id);
-    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
-                              frame->hd.stream_id,
-                              1);  // XXX send appropriate code
-  }
-  return 0;
-}
-
-
-
-
-
-
-
-
-
-
-static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2_frame *frame) {
-
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, frame->hd.stream_id);
-  if (ezstream == NULL) {
-    atlog("stream %d not found. sending rst\n", frame->hd.stream_id);
-    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
-                              frame->hd.stream_id, 1);
-    return 0;
-  }
-  if (ezstream->path == NULL)
-    return 0;
-
-  ezgrpc2_list_t *lmessages = ezgrpc2_list_new(NULL);
-
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0) {
-    /* In scenarios where the Request stream needs to be closed but no data remains
-     * to be sent implementations MUST send an empty DATA frame with this flag set. */
-    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event_t *event = ezgrpc2_event_new(
-      EZGRPC2_EVENT_MESSAGE,
-      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
-      ((ezgrpc2_event_message_t) {
-        .lmessages = lmessages,
-        .end_stream = 1,
-        .stream_id = frame->hd.stream_id,
-      })
-    );
-
-    ezgrpc2_list_push_back(ezstream->path->levents, event);
-    return 0;
-  }
-
-  size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, lmessages);
-  if (lseek != 0) {
-    assert(lseek <= ezstream->recv_len);
-    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-    memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
-    ezstream->recv_len -= lseek;
-    ezgrpc2_event_t *event = ezgrpc2_event_new(
-      EZGRPC2_EVENT_MESSAGE,
-      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
-      ((ezgrpc2_event_message_t) {
-        .lmessages = lmessages,
-        .end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0,
-        .stream_id = frame->hd.stream_id,
-      })
-    );
-
-    ezgrpc2_list_push_back(ezstream->path->levents, event);
-  }
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
-    /* we've receaived an end stream but last message is truncated */
-    atlog("event dataloss %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event_t *event = ezgrpc2_event_new(
-      EZGRPC2_EVENT_DATALOSS,
-      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
-      ((ezgrpc2_event_dataloss_t) {
-        .stream_id = ezstream->stream_id,
-      })
-    );
-  
-    ezgrpc2_list_push_back(ezstream->path->levents, event);
-    //event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
-  }
-  return 0;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-static int on_frame_recv_callback(nghttp2_session *session,
-                                  const nghttp2_frame *frame, void *user_data) {
-#ifdef EZENABLE_DEBUG
-  atlog("frame type: %d, stream id %d\n", frame->hd.type, frame->hd.stream_id);
-#endif
-  ezgrpc2_session_t *ezsession = user_data;
-  switch (frame->hd.type) {
-    case NGHTTP2_SETTINGS:
-      return on_frame_recv_settings(ezsession, frame);
-    case NGHTTP2_HEADERS:
-      return on_frame_recv_headers(ezsession, frame);
-    case NGHTTP2_DATA:
-      return on_frame_recv_data(ezsession, frame);
-    case NGHTTP2_WINDOW_UPDATE:
-      // printf("frame window update %d\n",
-      // frame->window_update.window_size_increment); int res;
-      //    if ((res = nghttp2_session_set_local_window_size(session,
-      //    NGHTTP2_FLAG_NONE, frame->hd.stream_id,
-      //    frame->window_update.window_size_increment)) != 0)
-      //      assert(0);
-      break;
-    default:
-      break;
-  }
-  return 0;
-}
-
-
-
-
-
-
-
-
-
-static int on_data_chunk_recv_callback(nghttp2_session *session, u8 flags,
-                                       i32 stream_id, const u8 *data,
-                                       size_t len, void *user_data) {
-  ezgrpc2_session_t *ezsession = user_data;
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
-  //ezgrpc2_stream_t *ezstream = ezgrpc2_list_find(&ezsession->lstreams, ezgrpc2_list_cmp_ezstream_id, &stream_id);
-  if (ezstream == NULL) {
-    atlog("stream_id %d doesn't exist\n", stream_id);
-    return 0;
-  }
-
-
-  /* prevent an attacker from pushing large POST data */
-  if ((ezstream->recv_len + len) > EZWINDOW_SIZE) {
-    nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
-                              stream_id, 1);  // XXX send appropriate code
-    atlog(COLSTR("POST data exceeds maximum allowed size, killing stream %d\n",
-                  BHRED),
-           stream_id);
-    return 1;
-  }
-
-
-  memcpy(ezstream->recv_data + ezstream->recv_len, data, len);
-  ezstream->recv_len += len;
-#ifdef EZENABLE_DEBUG
-  atlog("data chunk recv %zu bytes at stream %d\n", len, stream_id);
-#endif
-
-  return 0;
-}
-
-int on_stream_close_callback(nghttp2_session *session, i32 stream_id,
-                             u32 error_code, void *user_data) {
-  atlog("stream %d closed\n", stream_id);
-  ezgrpc2_session_t *ezsession = user_data;
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
-  assert(ezstream == ezgrpc2_list_remove(ezsession->lstreams, ezgrpc2_list_cmp_ezstream_id, &stream_id));
-  stream_free(ezstream);
-
-  return 0;
-}
-
-
-/* ----------- END NGHTTP2 CALLBACKS ------------------*/
-
-
-
 
 
 
@@ -1137,31 +255,6 @@ static int makenonblock(int sockfd) {
 
 
 
-static int server_setup_ngcallbacks(nghttp2_session_callbacks *ngcallbacks) {
-  /* clang-format off */
-  nghttp2_session_callbacks_set_send_callback(ngcallbacks, ngsend_callback);
-  nghttp2_session_callbacks_set_recv_callback(ngcallbacks, ngrecv_callback);
-
-  /* prepares and allocates memory for the incoming HEADERS frame */
-  nghttp2_session_callbacks_set_on_begin_headers_callback(ngcallbacks, on_begin_headers_callback);
-  /* we received that HEADERS frame. now here's the http2 fields */
-  nghttp2_session_callbacks_set_on_header_callback(ngcallbacks, on_header_callback);
-  /* we received a frame. do something about it */
-  nghttp2_session_callbacks_set_on_frame_recv_callback(ngcallbacks, on_frame_recv_callback);
-//  nghttp2_session_callbacks_set_on_frame_send_callback(ngcallbacks, on_frame_send_callback);
-
-  //  nghttp2_session_callbacks_set_on_frame_send_callback(callbacks,
-  //                                                       on_frame_send_callback);
-  nghttp2_session_callbacks_set_on_data_chunk_recv_callback(ngcallbacks, on_data_chunk_recv_callback);
-  nghttp2_session_callbacks_set_on_stream_close_callback(ngcallbacks, on_stream_close_callback);
- // nghttp2_session_callbacks_set_send_data_callback(ngcallbacks, send_data_callback);
-  //  nghttp2_session_callbacks_set_before_frame_send_callback(callbacks,
-  //  before_frame_send_callback);
-
-  /* clang-format on */
-
-  return 0;
-}
 
 
 
@@ -1241,6 +334,7 @@ static int session_create(
     shutdown(sockfd, SHUT_RDWR);
     assert(0);  // TODO
   }
+  memcpy(&ezsession->server_settings, &server->server_settings, sizeof(ezgrpc2_server_settings_t));
 
 
   /**********************.
@@ -1257,9 +351,9 @@ static int session_create(
 
   /* 16kb frame size */
   nghttp2_settings_entry siv[] = {
-      {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, EZWINDOW_SIZE},
-      {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, 16 * 1024},
-      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 32},
+      {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, ezsession->server_settings.initial_window_size},
+      {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, ezsession->server_settings.max_frame_size},
+      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, ezsession->server_settings.max_concurrent_streams},
   };
   res =
       nghttp2_submit_settings(ezsession->ngsession, NGHTTP2_FLAG_NONE, siv, 2);
@@ -1450,8 +544,7 @@ ezgrpc2_server_t *ezgrpc2_server_new(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
   int backlog,
-  void *settings) {
-  (void)settings;
+  ezgrpc2_server_settings_t *server_settings) {
   struct sockaddr_in ipv4_saddr = {0};
   struct sockaddr_in6 ipv6_saddr = {0};
   ezgrpc2_server_t *server = NULL;
@@ -1596,6 +689,14 @@ ezgrpc2_server_t *ezgrpc2_server_new(
   WSACleanup();
 #endif
 
+  if (server_settings == NULL) {
+    ezgrpc2_server_settings_t *server_settings_ = ezgrpc2_server_settings_new(NULL);
+    assert(server_settings_ != NULL);
+    memcpy(&server->server_settings, server_settings_, sizeof(ezgrpc2_server_settings_t));
+    ezgrpc2_server_settings_free(server_settings_);
+  } else {
+    memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings_t));
+  }
   /* start accepting connections */
 
   return server;
@@ -1672,6 +773,7 @@ int ezgrpc2_session_send(
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
   ezgrpc2_list_t *lmessages) {
+  int res;
   ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     return 1;
@@ -1689,7 +791,15 @@ int ezgrpc2_session_send(
   data_provider.source.ptr = ezstream;
   data_provider.read_callback = data_source_read_callback2;
   nghttp2_submit_data2(ezsession->ngsession, 0, stream_id, &data_provider);
-  nghttp2_session_send(ezsession->ngsession);
+
+  while (nghttp2_session_want_write(ezsession->ngsession)) {
+    res = nghttp2_session_send(ezsession->ngsession);
+    if (res) {
+      ezlog(COLSTR("nghttp2: %s. killing...\n", BHRED),
+            nghttp2_strerror(res));
+      return 3;
+    }
+  }
   return 0;
 }
 
@@ -1719,7 +829,7 @@ int ezgrpc2_session_end_stream(
 
   char grpc_status[32] = {0};
   int len = snprintf(grpc_status, 31, "%d",(int) status);
-  i8 *grpc_message = ezgrpc2_status_strstatus(status);
+  i8 *grpc_message = ezgrpc2_grpc_status_strstatus(status);
   nghttp2_nv trailers[] = {
       {(void *)"grpc-status", (void *)grpc_status, 11, len},
       {(void *)"grpc-message", (void *)grpc_message, 12,
@@ -1757,8 +867,6 @@ int ezgrpc2_session_end_session(
   nghttp2_submit_goaway(ezsession->ngsession, 0, last_stream_id, error_code, NULL, 0);
   nghttp2_session_send(ezsession->ngsession);
 
-  //shutdown(ezsession->sockfd, SHUT_RDWR);
-  //memset(ezsession->session_id, 0, 32);
   return 0;
 }
 
@@ -1776,11 +884,39 @@ int ezgrpc2_session_find_header(
     return 2;
 
   ezgrpc2_header_t *found;
-  if ((found = ezgrpc2_list_find(ezstream->lheaders, ezgrpc2_list_cmp_ezheader_name, ezheader))
+  if ((found = ezgrpc2_list_find(ezstream->lheaders, list_cmp_ezheader_name, ezheader))
       == NULL)
     return 3;
 
-
   return ezheader->value = found->value, ezheader->vlen = found->vlen, 0;
 }
-  
+
+
+const char *ezgrpc2_license(void){
+  static const char *license = 
+    "Copyright (c) 2023-2025 M. N. Yoshie & Al-buharie Amjari\n"
+    "\n"
+    "Redistribution and use in source and binary forms, with or without\n"
+    "modification, are permitted provided that the following conditions\n"
+    "are met:\n"
+    "\n"
+    "  1. Redistributions of source code must retain the above copyright notice,\n"
+    "  this list of conditions and the following disclaimer.\n"
+    "\n"
+    "  2. Neither the name of the copyright holder nor the names of its\n"
+    "  contributors may be used to endorse or promote products derived from\n"
+    "  this software without specific prior written permission.\n"
+    "\n"
+    "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n"
+    "“AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
+    "LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n"
+    "A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n"
+    "HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"
+    "SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED\n"
+    "TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR\n"
+    "PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF\n"
+    "LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING\n"
+    "NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
+    "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n";
+  return license;
+}

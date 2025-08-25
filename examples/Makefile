@@ -1,10 +1,22 @@
 -include ../config.mk
 
 CFLAGS += -I../src
-LDFLAGS += -L../src -l:libezgrpc2.a -lnghttp2 -luuid -lpthread 
+LDFLAGS += -L../src -l:libezgrpc2.a -lnghttp2 -lpthread 
 
 targets = multi_threaded.bin
 targets += single_threaded.bin
+
+ifeq ($(OS),Windows_NT)
+	LDFLAGS += -lWs2_32
+	LDFLAGS += -lRpcrt4
+else
+	LDFLAGS += -luuid
+endif
+
+ifeq ($(HAVE_SECCOMP),1)
+  LDFLAGS += -lseccomp
+  CFLAGS += -DHAVE_SECCOMP
+endif
 
 all : $(targets)
 
