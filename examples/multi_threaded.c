@@ -26,7 +26,7 @@ struct userdata_t {
   i32 stream_id;
   ezgrpc2_session_uuid_t *session_uuid;
   char end_stream;
-  ezgrpc2_status_t status;
+  ezgrpc2_grpc_status_t status;
 
   /* input messages. requested by the client */
   ezgrpc2_list_t *limessages;
@@ -42,7 +42,7 @@ struct path_userdata_t {
 
 
 struct userdata_t *create_userdata(ezgrpc2_session_uuid_t *session_uuid, int32_t stream_id,
-    ezgrpc2_list_t *lmessages, char end_stream, ezgrpc2_status_t status) {
+    ezgrpc2_list_t *lmessages, char end_stream, ezgrpc2_grpc_status_t status) {
   struct userdata_t *data = malloc(sizeof(*data));
   data->session_uuid = ezgrpc2_session_uuid_copy(session_uuid);
   data->stream_id = stream_id;
@@ -75,7 +75,7 @@ void *callback_path0(void *data){
   for (int i = 0; i < 5; i++, pp++) {
     ezgrpc2_message_t *msg = malloc(sizeof(*msg));
     msg->is_compressed = 0;
-    msg->data = (void*)strdup("    Hello world from path0!!");
+    msg->data = (void*)strdup("    path0!");
     
     msg->len = strlen((char*)msg->data) + 1;
     *(uint32_t*)(msg->data) = pp;
@@ -102,7 +102,7 @@ void *callback_path1(void *data){
   for (int i = 0; i < 5; i++, pp++) {
     ezgrpc2_message_t *msg = malloc(sizeof(*msg));
     msg->is_compressed = 0;
-    msg->data = (void*)strdup("    Hello world from path1!!");
+    msg->data = (void*)strdup("    path1!");
     
     msg->len = strlen((char*)msg->data) + 1;
     *(uint32_t*)(msg->data) = pp;

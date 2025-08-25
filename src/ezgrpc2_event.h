@@ -1,11 +1,9 @@
 #ifndef EZGRPC2_EVENT_H
 #define EZGRPC2_EVENT_H
 
+#include "common.h"
 #include "ezgrpc2_session_uuid.h"
 
-#ifndef EZGRPC2_H
-#error "ezgrpc2_event.h must not be included independently. include instead ezgrpc2.h"
-#endif
 typedef struct ezgrpc2_event_cancel_t ezgrpc2_event_cancel_t;
 typedef struct ezgrpc2_event_message_t ezgrpc2_event_message_t;
 typedef struct ezgrpc2_event_dataloss_t ezgrpc2_event_dataloss_t;

@@ -187,7 +187,6 @@ void ezgrpc2_pthpool_stop_and_join(ezgrpc2_pthpool_t *pool) {
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
   force_assert(!pthread_mutex_unlock(&pool->mutex));
-  void *ret;
   for (int i = 0; i < pool->nb_threads; i++) 
     pthread_join(pool->threads[i], NULL);
 

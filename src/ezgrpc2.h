@@ -12,49 +12,25 @@
 
 #include "ezgrpc2_list.h"
 #include "ezgrpc2_event.h"
+#include "ezgrpc2_server_settings.h"
 #include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_message.h"
-
-#ifdef _WIN32
-#  include <winsock2.h>
-#  include <windows.h>
-#endif
+#include "ezgrpc2_path.h"
+#include "ezgrpc2_header.h"
+#include "ezgrpc2_grpc_status.h"
 
 #define EZGRPC_MAX_SESSIONS 32
 //#define EZGRPC2_SESSION_UUID_LEN 37
 
 
+typedef ezgrpc2_list_t ezgrpc2_list_message_t;
+typedef ezgrpc2_list_t ezgrpc2_list_event_t;
+typedef struct ezgrpc2_server_settings_t ezgrpc2_server_settings_t;
 
-typedef enum ezgrpc2_status_t ezgrpc2_status_t;
-/**
- * Types of trailer status codes
- */
-enum ezgrpc2_status_t {
-  /* https://github.com/grpc/grpc/tree/master/include/grpcpp/impl/codegen */
-  EZGRPC2_STATUS_OK = 0,
-  EZGRPC2_STATUS_CANCELLED = 1,
-  EZGRPC2_STATUS_UNKNOWN = 2,
-  EZGRPC2_STATUS_INVALID_ARGUMENT = 3,
-  EZGRPC2_STATUS_DEADLINE_EXCEEDED = 4,
-  EZGRPC2_STATUS_NOT_FOUND = 5,
-  EZGRPC2_STATUS_ALREADY_EXISTS = 6,
-  EZGRPC2_STATUS_PERMISSION_DENIED = 7,
-  EZGRPC2_STATUS_RESOURCE_EXHAUSTED = 8,
-  EZGRPC2_STATUS_FAILED_PRECONDITION = 9,
-  EZGRPC2_STATUS_OUT_OF_RANGE = 11,
-  EZGRPC2_STATUS_UNIMPLEMENTED = 12,
-  EZGRPC2_STATUS_INTERNAL = 13,
-  EZGRPC2_STATUS_UNAVAILABLE = 14,
-  EZGRPC2_STATUS_DATA_LOSS = 15,
-  EZGRPC2_STATUS_UNAUTHENTICATED = 16,
-  EZGRPC2_STATUS_NULL = -1
-};
 
 
 
 typedef struct ezgrpc2_server_t ezgrpc2_server_t;
-typedef struct ezgrpc2_header_t ezgrpc2_header_t;
-typedef struct ezgrpc2_path_t ezgrpc2_path_t;
 
 /**
  * An opaque server context struct type returned by :c:func:`ezgrpc2_server_new()`.
@@ -62,39 +38,6 @@ typedef struct ezgrpc2_path_t ezgrpc2_path_t;
 struct ezgrpc2_server_t;
 
 
-/**
- *
- */
-struct ezgrpc2_header_t {
-  size_t nlen;
-  char *name;
-  char *value;
-  size_t vlen;
-};
-
-
-/**
- * A path to poll. To be passed to :c:func:`ezgrpc2_server_poll()`.
- */
-struct ezgrpc2_path_t {
-  /**
-   * Path to listen to. Must not contain an anchor or a query (# or ?)
-   */
-  char *path;
-
-  /**
-   * User defined userdata
-   */
-  void *userdata;
-
-  /**
-   * This is a list of :c:struct:`ezgrpc2_event_t` and it
-   * contains events for this specific path.
-   *
-   * Cast the return of :c:func:`ezgrpc2_list_pop_first()` to a pointer to :c:struct:`ezgrpc2_event_t` when its argument id ``levents``
-   */
-  ezgrpc2_list_t *levents;
-};
 
 
 
@@ -131,7 +74,7 @@ ezgrpc2_server_t *ezgrpc2_server_new(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
   int backlog,
-  void *settings);
+  ezgrpc2_server_settings_t *server_settings);
 
 
 /**
@@ -208,7 +151,7 @@ int ezgrpc2_session_end_stream(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
-  ezgrpc2_status_t status);
+  ezgrpc2_grpc_status_t status);
 
 /**
  * The :c:func:`ezgrpc2_session_end_session()` ends the session
@@ -223,7 +166,7 @@ int ezgrpc2_session_end_session(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_id,
   i32 last_stream_id,
-  ezgrpc2_status_t status);
+  ezgrpc2_grpc_status_t status);
 
 #if 0
 /* list of ezgrpc2_header_t */
@@ -268,6 +211,7 @@ int ezgrpc2_session_find_header(
   i32 stream_id,
   ezgrpc2_header_t *ezheader);
 
+const char *ezgrpc2_license(void);
 
 #ifdef __cplusplus
 }

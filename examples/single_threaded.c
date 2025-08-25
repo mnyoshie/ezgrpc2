@@ -49,7 +49,7 @@ ezgrpc2_list_t *callback_path0(ezgrpc2_list_t *lmessages){
   for (int i = 0; i < 2; i++, pp++) {
     ezgrpc2_message_t *msg = malloc(sizeof(*msg));
     msg->is_compressed = 0;
-    msg->data = (void*)strdup("    Hello world from path0!!");
+    msg->data = (void*)strdup("    path0!");
     
     msg->len = strlen((char*)msg->data) + 1;
     *(uint32_t*)(msg->data) = pp;
@@ -66,7 +66,7 @@ ezgrpc2_list_t *callback_path1(ezgrpc2_list_t *lmessages){
   for (int i = 0; i < 2; i++, pp++) {
     ezgrpc2_message_t *msg = malloc(sizeof(*msg));
     msg->is_compressed = 0;
-    msg->data = (void*)strdup("    Hello world from path1!!");
+    msg->data = (void*)strdup("    path1!");
     
     msg->len = strlen((char*)msg->data) + 1;
     *(uint32_t*)(msg->data) = pp;
