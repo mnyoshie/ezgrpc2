@@ -1,5 +1,6 @@
 #ifndef EZGRPC2_CORE_H
 #define EZGRPC2_CORE_H
+#include <string.h>
 #include <nghttp2/nghttp2.h>
 
 #include "ansicolors.h"
@@ -128,7 +129,7 @@ struct ezgrpc2_session_t {
   /* settings requested by the client. to be set when a SETTINGS
    * frame is received.
    */
-  ezgrpc_settingsf_t csettings;
+ // ezgrpc_settingsf_t csettings;
 
   /* A pointer to the settings in ezgrpc2_server_t.settings
    */

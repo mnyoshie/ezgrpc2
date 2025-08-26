@@ -24,6 +24,7 @@ targets += libezgrpc2.a
 
 objects = ezgrpc2.o
 objects += ezgrpc2_event.o
+objects += ezgrpc2_global.o
 objects += ezgrpc2_grpc_status.o
 objects += ezgrpc2_header.o
 objects += ezgrpc2_list.o
@@ -48,7 +49,7 @@ libezgrpc2.so : $(objects)
 	$(Q)$(CC) -shared $(CFLAGS) $^ -o $@
 
 libezgrpc2.dll : $(objects)
-	$(Q)$(CC) -shared $(CFLAGS) $^ -o $@
+	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -o $@
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $< -o $@

@@ -508,27 +508,28 @@ static int session_events(ezgrpc2_session_t *ezsession) {
 `------------------------------------------------------*/
 
 void ezgrpc2_server_free(
-  ezgrpc2_server_t *s) {
+  ezgrpc2_server_t *ezserver) {
   for (EZNFDS i = 0; i < 2; i++)
   {
-    if (s->fds[i].fd != -1) {
-      close(s->fds[i].fd);
+    if (ezserver->fds[i].fd != -1) {
+      close(ezserver->fds[i].fd);
     }
   }
 
-  for (EZNFDS i = 2; i < s->nb_fds; i++)
+  for (EZNFDS i = 2; i < ezserver->nb_fds; i++)
   {
-    if (s->fds[i].fd != -1) {
-      shutdown(s->fds[i].fd, SHUT_RDWR);
-      close(s->fds[i].fd);
-      session_free(&s->sessions[i]);
+    if (ezserver->fds[i].fd != -1) {
+      shutdown(ezserver->fds[i].fd, SHUT_RDWR);
+      close(ezserver->fds[i].fd);
+      session_free(&ezserver->sessions[i]);
     }
   }
-  free(s->fds);
+  free(ezserver->fds);
     
-  free(s->ipv4_addr);
-  free(s->ipv6_addr);
-  free(s);
+  free(ezserver->ipv4_addr);
+  free(ezserver->ipv6_addr);
+  free(ezserver->sessions);
+  free(ezserver);
 }
 
 
@@ -548,14 +549,6 @@ ezgrpc2_server_t *ezgrpc2_server_new(
   struct sockaddr_in ipv4_saddr = {0};
   struct sockaddr_in6 ipv6_saddr = {0};
   ezgrpc2_server_t *server = NULL;
-#ifdef _WIN32
-  int ret;
-  WSADATA wsa_data = {0};
-  if ((ret = WSAStartup(0x0202, &wsa_data))) {
-    ezlog("WSAStartup failed: error %d\n", ret);
-    return NULL;
-  }
-#endif
   EZSOCKET ipv4_sockfd = EZINVALID_SOCKET;
   EZSOCKET ipv6_sockfd = EZINVALID_SOCKET;
 
@@ -896,6 +889,7 @@ const char *ezgrpc2_license(void){
   static const char *license = 
     "ezgrpc2 - A grpc server without the extra fancy features.\n"
     "https://github.com/mnyoshie/ezgrpc2\n"
+    "\n"
     "Copyright (c) 2023-2025 M. N. Yoshie & Al-buharie Amjari\n"
     "\n"
     "Redistribution and use in source and binary forms, with or without\n"
@@ -910,7 +904,7 @@ const char *ezgrpc2_license(void){
     "  this software without specific prior written permission.\n"
     "\n"
     "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n"
-    "“AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
+    "\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
     "LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n"
     "A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n"
     "HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"

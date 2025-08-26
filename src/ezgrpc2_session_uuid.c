@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <assert.h>
 
 #ifdef _WIN32
 #include <Rpc.h>

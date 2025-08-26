@@ -1,6 +1,8 @@
 #ifndef EZGRPC2_COMMON_H
 #define EZGRPC2_COMMON_H
 #include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 
 typedef char i8;
 typedef uint8_t u8;

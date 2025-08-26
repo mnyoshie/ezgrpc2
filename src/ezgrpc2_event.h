@@ -2,6 +2,7 @@
 #define EZGRPC2_EVENT_H
 
 #include "common.h"
+#include "ezgrpc2_list.h"
 #include "ezgrpc2_session_uuid.h"
 
 typedef struct ezgrpc2_event_cancel_t ezgrpc2_event_cancel_t;

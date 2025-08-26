@@ -48,13 +48,12 @@ ezgrpc2_list_t *callback_path0(ezgrpc2_list_t *lmessages){
   for (int i = 0; i < 2; i++, pp++) {
     ezgrpc2_message_t *msg = ezgrpc2_message_new(11);
     msg->is_compressed = 0;
-    memcpy(msg->data, "    path1!", 11);
+    memcpy(msg->data, "    path0!", 11);
     *(uint32_t*)(msg->data) = pp;
     
     ezgrpc2_list_push_back(lmessages_ret, msg);
   }
 
-  /* cleanup (input messages) */
   return lmessages_ret;
 }
 ezgrpc2_list_t *callback_path1(ezgrpc2_list_t *lmessages){
@@ -67,7 +66,6 @@ ezgrpc2_list_t *callback_path1(ezgrpc2_list_t *lmessages){
     ezgrpc2_list_push_back(lmessages_ret, msg);
   }
 
-  /* cleanup (input messages) */
   return lmessages_ret;
 }
 
@@ -164,6 +162,7 @@ static void *signal_handler(void *data) {
 
 #endif
 int main() {
+  (void)ezgrpc2_global_init(0);
   int res;
   const size_t nb_paths = 2;
   ezgrpc2_path_t paths[nb_paths];
@@ -298,6 +297,7 @@ int main() {
   /* we aee aure these are enpty because we did not poll at break */
   ezgrpc2_list_free(paths[0].levents);
   ezgrpc2_list_free(paths[1].levents);
+  ezgrpc2_global_cleanup();
 
   return res;
 }

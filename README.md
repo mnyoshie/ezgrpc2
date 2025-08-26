@@ -15,30 +15,54 @@ To be determine.
 
 ## Architecture
 
-
 This architecture was inspired by `poll(2)`, but instead of polling fds and returning events
 such as POLLIN, you poll a lists of paths and it gives events of `EVENT_MESSAGE`,
-`EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids.
+`EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids:
+```c
+struct ezgrpc2_event_t {
+
+  ezgrpc2_session_uuid_t *session_uuid;
+  ezgrpc2_event_type_t type;
+  union {
+    ezgrpc2_event_message_t message;
+    ezgrpc2_event_dataloss_t dataloss;
+    ezgrpc2_event_cancel_t cancel;
+  };
+};
+```
 
 ## Building
 
-Use good'ol make:
+Linux dependencies: `nghttp2 pthreads libuuid`
+
+Windows dependencies: `nghttp2 pthreads`
+
+Once the dependencies are installed building on Linux and Windows (msys2
+ucrt64) are pretty much the same. Run good'ol make:
 ```
 make
 ```
 
 ## Usage
 
-Creating a server:
+Includes:
+```c
+#include "ezgrpc2.h"
 ```
-char *ipv4 = "0.0.0.0";
+
+At startup of your application, please initialize the library by calling,
+`ezgrpc2_global_init(0);`. Then call `ezgrpc2_global_cleanup();` once you're done
+using the library.
+
+Creating a server:
+```c
 uint16_t port = 19009;
 int backlog = 16;
-ezgrpc2_server_t *server = ezgrpc2_server_new(ipv4, port, NULL, 0, backlog, NULL);
+ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, backlog, NULL);
 ```
 
 Setting up service:
-```
+```c
 const int nb_paths = 1;
 ezgrpc2_path_t paths[nb_paths];
 paths[0].paths = "/test.yourAPI/whatever_service";
@@ -46,13 +70,13 @@ paths[0].levents = ezgrpc2_list_new(NULL);
 ```
 
 Polling for events:
-```
-int timeout = 100;
+```c
+int timeout = 10000;
 int res = ezgrpc2_server_poll(server, paths, nb_paths, timeout);
 ```
 
 Handle events:
-```
+```c
 if (res > 0) {
   ezgrpc2_event_t *event;
   while ((event = ezgrpc2_list_pop_front(paths[0].levents)) != NULL) {
@@ -78,7 +102,7 @@ if (res > 0) {
 ```
 
 Creating a message:
-```
+```c
 ezgrpc2_message_t *message = ezgrpc2_message_new(11);
 memcpy(message->data, "Hello mom!", 11);
 ezgrpc2_list_t *lmessages = ezgrpc2_list_new(NULL);
@@ -86,13 +110,18 @@ ezgrpc2_list_push_back(list, message);
 ```
 
 Sending a message:
-```
+```c
 ezgrpc2_session_send(server, event->session_uuid, event->message.stream_id, lmessages);
 ```
 
 Ending stream:
-```
+```c
 ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_STATUS_OK);
+```
+
+when you're done using tbe server:
+```c
+ezgrpc2_server_free(server);
 ```
 
 see `https://github.com/mnyoshie/ezgrpc2/blob/master/examples` for a complete
@@ -102,6 +131,7 @@ MWE server.
 ```
 ezgrpc2 - A grpc server without the extra fancy features.
 https://github.com/mnyoshie/ezgrpc2
+
 Copyright (c) 2023-2025 M. N. Yoshie
 Copyright (c) 2023-2025 Al-buharie Amjari <harieamjari@gmail.com>
 
@@ -127,7 +157,11 @@ PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
 LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
---------------------------------------------------------------------
+```
+
+And if you're in windows, it includes an additional license from using
+wepoll.
+```
 wepoll - epoll for Windows
 https://github.com/piscisaureus/wepoll
 
@@ -146,7 +180,7 @@ met:
     documentation and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
 A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
 OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,

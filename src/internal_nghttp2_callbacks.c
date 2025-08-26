@@ -1,9 +1,13 @@
+#include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include <errno.h>
-#include "core.h"
-#include "ezgrpc2.h"
-#include "internal_helpers.h"
 
+#include "core.h"
+#include "ezgrpc2_event.h"
+#include "ezgrpc2_grpc_status.h"
+
+#include "internal_helpers.h"
 #include "internal_nghttp2_callbacks.h"
 
 #define atlog(...) (void)0

@@ -11,14 +11,11 @@
 #include <unistd.h>
 #include <assert.h>
 
-#ifdef HAVE_SECCOMP
-#include <seccomp.h>
-#endif
-
 #include "ezgrpc2.h"
 #include "ezgrpc2_pthpool.h"
 
 #ifdef __unix__
+#include <signal.h>
 #include <pthread.h>
 #endif
 
@@ -285,6 +282,7 @@ static void *signal_handler(void *data) {
 #endif
 
 int main() {
+  (void)ezgrpc2_global_init(0);
   int res;
   const size_t nb_paths = 2;
   ezgrpc2_path_t paths[nb_paths];
@@ -326,25 +324,6 @@ int main() {
     abort();
   }
 #endif /* __unix__ */
-
-#ifdef HAVE_SECCOMP
-#define BLACKLIST(ctx, name)                                                   \
-  do {                                                                         \
-    if ((res = seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(name), 0))) {     \
-      fprintf(stderr, "seccomp error %d\n", res);                              \
-      goto seccomp_fail;                                                       \
-    }                                                                          \
-  } while (0)
-  /* Fancy security to prevent shell executions.
-   * Maybe trap them and kill the server gracefully.*/
-  scmp_filter_ctx seccomp_ctx = seccomp_init(SCMP_ACT_ALLOW);
-  assert(seccomp_ctx != 0);
-  BLACKLIST(seccomp_ctx, execve);
-  BLACKLIST(seccomp_ctx, fork);
-  //BLACKLIST(seccomp_ctx, seccomp);
-  seccomp_load(seccomp_ctx);
-#undef BLACKLIST
-#endif
 
   /* Tasks for unary requests (single message with end stream) */
   ezgrpc2_pthpool_t *unordered_pool = NULL;
@@ -458,9 +437,6 @@ int main() {
   ezgrpc2_pthpool_free(ordered_pool);
   ezgrpc2_pthpool_free(unordered_pool);
 
-#ifdef HAVE_SECCOMP
-  seccomp_release(seccomp_ctx);
-seccomp_fail:
-#endif
+  ezgrpc2_global_cleanup();
   return res;
 }

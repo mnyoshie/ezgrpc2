@@ -10,8 +10,10 @@
 #include <stdint.h>
 #include "common.h"
 
-#include "ezgrpc2_list.h"
 #include "ezgrpc2_event.h"
+#include "ezgrpc2_global.h"
+#include "ezgrpc2_list_event.h"
+#include "ezgrpc2_list_message.h"
 #include "ezgrpc2_server_settings.h"
 #include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_message.h"
@@ -23,8 +25,6 @@
 //#define EZGRPC2_SESSION_UUID_LEN 37
 
 
-typedef ezgrpc2_list_t ezgrpc2_list_message_t;
-typedef ezgrpc2_list_t ezgrpc2_list_event_t;
 typedef struct ezgrpc2_server_settings_t ezgrpc2_server_settings_t;
 
 
