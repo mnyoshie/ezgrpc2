@@ -1,6 +1,6 @@
 # EZgRPC2
 
-A single threaded, non-blocking, asynchronous, gRPC library in C.
+A single threaded, non-blocking, asynchronous, gRPC server library in C.
 
 This library doesn't necessarily makes the implementation of gRPC server easier, in fact,
 it makes it harder.
@@ -17,7 +17,8 @@ To be determine.
 
 This architecture was inspired by `poll(2)`, but instead of polling fds and returning events
 such as POLLIN, you poll a lists of paths and it gives events of `EVENT_MESSAGE`,
-`EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids:
+`EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids. In essence, you need process
+this event struct:
 ```c
 struct ezgrpc2_event_t {
 
@@ -37,7 +38,7 @@ Linux dependencies: `nghttp2 pthreads libuuid`
 
 Windows dependencies: `nghttp2 pthreads`
 
-Once the dependencies are installed building on Linux and Windows (msys2
+Once the dependencies are installed, building on Linux and Windows (msys2
 ucrt64) are pretty much the same. Run good'ol make:
 ```
 make

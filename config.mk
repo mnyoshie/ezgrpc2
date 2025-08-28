@@ -2,6 +2,7 @@ CC ?= gcc
 AR ?= ar
 CXX ?= g++
 
+CFLAGS += -Wall
 EXTRACFLAGS ?=
 
 ifeq ($(DEBUG),1)

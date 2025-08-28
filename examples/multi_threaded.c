@@ -64,7 +64,7 @@ void *callback_path0(void *data){
   struct userdata_t *userdata = data;
   userdata->lomessages = ezgrpc2_list_new(NULL);
   /* if client did not request properly, skipp processing. */
-  if (userdata->status != EZGRPC2_STATUS_OK)
+  if (userdata->status != EZGRPC2_GRPC_STATUS_OK)
     return userdata;
 
   /* pretend this is our response (output messages) */
@@ -89,7 +89,7 @@ void *callback_path1(void *data){
   struct userdata_t *userdata = data;
   userdata->lomessages = ezgrpc2_list_new(NULL);
   /* if client did not request properly, skipp processing. */
-  if (userdata->status != EZGRPC2_STATUS_OK)
+  if (userdata->status != EZGRPC2_GRPC_STATUS_OK)
     return userdata;
 
   /* pretend this is our response (output messages) */
@@ -123,8 +123,7 @@ static void handle_event_message(ezgrpc2_event_t *event,
       /* This is unary service, but they are sending more than one message */
       ezgrpc2_session_end_stream(server, event->session_uuid,
                                  event->message.stream_id,
-                                 EZGRPC2_STATUS_INVALID_ARGUMENT);
-      free_lmessages(event->message.lmessages);
+                                 EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
       return;
     }
   }
@@ -165,12 +164,12 @@ static void handle_event_dataloss(ezgrpc2_event_t *event,
    * this stream. This is the last.
    */
 
-  /* You may also send a status "EZGRPC2_STATUS_DATA_LOSS", when the
+  /* You may also send a status "EZGRPC2_GRPC_STATUS_DATA_LOSS", when the
    * message failed to be deserialized.
    */
   struct userdata_t *data = create_userdata(event->session_uuid, event->dataloss.stream_id,
                          ezgrpc2_list_new(NULL), 1,
-                         EZGRPC2_STATUS_DATA_LOSS);
+                         EZGRPC2_GRPC_STATUS_DATA_LOSS);
 
   if (path_userdata->is_unary)
     ezgrpc2_pthpool_add_task(upool, path_userdata->callback, data, NULL,
@@ -340,7 +339,7 @@ int main() {
   assert(ordered_pool != NULL);
 
   /* The heart of this API */
-  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL);
+  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL, NULL);
   assert(server != NULL);
 
 

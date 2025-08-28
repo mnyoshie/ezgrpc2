@@ -64,6 +64,9 @@ __attribute__((visibility("hidden"))) nghttp2_ssize data_source_read_callback2(n
                                          u32 *data_flags,
                                          nghttp2_data_source *source,
                                          void *user_data) {
+  (void)session;
+  (void)stream_id;
+  (void)user_data;
   if (buf_len < 5) {
     atlog(COLSTR("error buf_len < 5\n", BHRED));
     return NGHTTP2_INTERNAL_ERROR;
@@ -133,6 +136,7 @@ exit:
 
 static nghttp2_ssize ngsend_callback(nghttp2_session *session, const u8 *data,
                                size_t length, int flags, void *user_data) {
+  (void)session;
   ezgrpc2_session_t *ezsession = user_data;
 
   EZSSIZE ret = send(ezsession->sockfd, data, length, 0);
@@ -205,7 +209,7 @@ static int on_begin_headers_callback(nghttp2_session *session,
   ezgrpc2_stream_t *ezstream = stream_new(frame->hd.stream_id);
 
   ezstream->recv_len = 0;
-  ezstream->recv_data = malloc(ezsession->server_settings.initial_window_size);
+  ezstream->recv_data = malloc(ezsession->server_http2_settings.initial_window_size);
 
   ezgrpc2_list_push_back(ezsession->lstreams, ezstream);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id ,ezstream);
@@ -258,6 +262,7 @@ static int on_header_callback(nghttp2_session *session,
     for (size_t i = 0; i < ezsession->nb_paths; i++) 
       if (!EZSTRCMP(ezsession->paths[i].path, value)) {
         ezstream->path = &ezsession->paths[i];
+        ezstream->path_index = i;
   #ifdef EZENABLE_DEBUG
         atlog("found service %s\n", ezsession->paths[i].path);
   #endif
@@ -297,7 +302,9 @@ static int on_header_callback(nghttp2_session *session,
 
 
 static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nghttp2_frame *frame) {
-  if (!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) return 0;
+  if (!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)){
+    return 0;
+  }
   /* if we've received an end stream in headers frame. send an RST. we
    * expected a data */
 #if 0
@@ -361,10 +368,14 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
   };
 
   if (nghttp2_submit_headers(ezsession->ngsession, 0, ezstream->stream_id, NULL, nva, 2,
-                           NULL)) {assert(0);}
+                           NULL)) {
+    atlog("fatal: nghttp2_submit_headers failed\n");
+    return 1;
+  }
+
   if (ezstream->path == NULL) {
     atlog("path null, submitting req\n");
-    int status = EZGRPC2_STATUS_UNIMPLEMENTED;
+    int status = EZGRPC2_GRPC_STATUS_UNIMPLEMENTED;
     char grpc_status[32] = {0};
     int len = snprintf(grpc_status, 31, "%d",(int) status);
     i8 *grpc_message = ezgrpc2_grpc_status_strstatus(status);
@@ -376,7 +387,7 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
     nghttp2_submit_trailer(ezsession->ngsession, frame->hd.stream_id, trailers, 2);
     atlog("trailer submitted\n");
    // nghttp2_session_send(ezsession->ngsession);
-   // ezgrpc2_session_end_stream(ezsession, ezstream->stream_id, EZGRPC2_STATUS_UNIMPLEMENTED);
+   // ezgrpc2_session_end_stream(ezsession, ezstream->stream_id, EZGRPC2_GRPC_STATUS_UNIMPLEMENTED);
     return 0;
   }
   atlog("ret id %d\n", frame->hd.stream_id);
@@ -400,28 +411,28 @@ static inline int on_frame_recv_settings(ezgrpc2_session_t *ezsession, const ngh
          frame->settings.hd.length);
   if (!(frame->settings.hd.flags & NGHTTP2_FLAG_ACK)) {
     // apply settings
-    for (size_t i = 0; i < frame->settings.niv; i++) {
-      switch (frame->settings.iv[i].settings_id) {
-        case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
-          ezsession->csettings.header_table_size =
-              frame->settings.iv[i].value;
-          break;
-        case NGHTTP2_SETTINGS_ENABLE_PUSH:
-          ezsession->csettings.enable_push = frame->settings.iv[i].value;
-          break;
-        case NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS:
-          ezsession->csettings.max_concurrent_streams =
-              frame->settings.iv[i].value;
-          break;
-        case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
-          ezsession->csettings.max_frame_size = frame->settings.iv[i].value;
-          // case NGHTTP2_SETTINGS_FLOW_CONTROL:
-          // ezstream->flow_control =  frame->settings.iv[i].value;
-          break;
-        default:
-          break;
-      };
-    }
+//    for (size_t i = 0; i < frame->settings.niv; i++) {
+//      switch (frame->settings.iv[i].settings_id) {
+//        case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
+//          ezsession->csettings.header_table_size =
+//              frame->settings.iv[i].value;
+//          break;
+//        case NGHTTP2_SETTINGS_ENABLE_PUSH:
+//          ezsession->csettings.enable_push = frame->settings.iv[i].value;
+//          break;
+//        case NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS:
+//          ezsession->csettings.max_concurrent_streams =
+//              frame->settings.iv[i].value;
+//          break;
+//        case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
+//          ezsession->csettings.max_frame_size = frame->settings.iv[i].value;
+//          // case NGHTTP2_SETTINGS_FLOW_CONTROL:
+//          // ezstream->flow_control =  frame->settings.iv[i].value;
+//          break;
+//        default:
+//          break;
+//      };
+//    }
   } else if (frame->settings.hd.flags & NGHTTP2_FLAG_ACK &&
              frame->settings.hd.length == 0) {
     /* OK. The client acknowledge our settings. do nothing */
@@ -460,18 +471,18 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0) {
     /* In scenarios where the Request stream needs to be closed but no data remains
      * to be sent implementations MUST send an empty DATA frame with this flag set. */
-    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event_t *event = ezgrpc2_event_new(
-      EZGRPC2_EVENT_MESSAGE,
-      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
-      ((ezgrpc2_event_message_t) {
-        .lmessages = lmessages,
-        .end_stream = 1,
-        .stream_id = frame->hd.stream_id,
-      })
-    );
-
-    ezgrpc2_list_push_back(ezstream->path->levents, event);
+//    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
+//    ezgrpc2_event_t *event = ezgrpc2_event_new(
+//      EZGRPC2_EVENT_MESSAGE,
+//      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
+//      ((ezgrpc2_event_message_t) {
+//        .lmessages = lmessages,
+//        .end_stream = 1,
+//        .stream_id = frame->hd.stream_id,
+//      })
+//    );
+//
+//    ezgrpc2_list_push_back(ezstream->path->levents, event);
     return 0;
   }
 
@@ -483,7 +494,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     ezstream->recv_len -= lseek;
     ezgrpc2_event_t *event = ezgrpc2_event_new(
       EZGRPC2_EVENT_MESSAGE,
-      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
+      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
       ((ezgrpc2_event_message_t) {
         .lmessages = lmessages,
         .end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0,
@@ -498,7 +509,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     atlog("event dataloss %zu\n", ezgrpc2_list_count(lmessages));
     ezgrpc2_event_t *event = ezgrpc2_event_new(
       EZGRPC2_EVENT_DATALOSS,
-      ezgrpc2_session_uuid_copy(ezsession->session_uuid),
+      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
       ((ezgrpc2_event_dataloss_t) {
         .stream_id = ezstream->stream_id,
       })
@@ -570,7 +581,7 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, u8 flags,
 
 
   /* prevent an attacker from pushing large POST data */
-  if ((ezstream->recv_len + len) > ezsession->server_settings.initial_window_size) {
+  if ((ezstream->recv_len + len) > ezsession->server_http2_settings.initial_window_size) {
     nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
                               stream_id, 1);  // XXX send appropriate code
     atlog(COLSTR("POST data exceeds maximum allowed size, killing stream %d\n",

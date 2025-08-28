@@ -17,6 +17,8 @@ ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uu
   case EZGRPC2_EVENT_DATALOSS:
     event->dataloss = va_arg(ap, ezgrpc2_event_dataloss_t);
     break;
+  default:
+    break;
   }
 
   return event;
@@ -41,7 +43,7 @@ void ezgrpc2_event_free(ezgrpc2_event_t *event) {
   case EZGRPC2_EVENT_DATALOSS:
     break;
   default:
-    abort();
+    break;
   }
 
   free(event);

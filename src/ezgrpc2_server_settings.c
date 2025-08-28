@@ -27,11 +27,7 @@ static ssize_t read_cb(void *const sock, void *buf, size_t len, int flags) {
 }
 
 static ezgrpc2_server_settings_t default_server_settings = {
-  .write_cb = write_cb,
-  .read_cb = read_cb,
-  .initial_window_size = 1 << 20,
-  .max_frame_size = 16*1024,
-  .max_concurrent_streams = 32
+  .max_connections = 1024
 };
 
 ezgrpc2_server_settings_t *ezgrpc2_server_settings_new(void *unused) {
@@ -41,16 +37,8 @@ ezgrpc2_server_settings_t *ezgrpc2_server_settings_new(void *unused) {
   return server_settings;
 }
 
-void ezgrpc2_server_settings_set_initial_window_size(ezgrpc2_server_settings_t *server_settings, size_t initial_window_size) {
-  server_settings->initial_window_size = initial_window_size;
-}
-
-void ezgrpc2_server_settings_set_max_frame_size(ezgrpc2_server_settings_t *server_settings, size_t max_frame_size) {
-  server_settings->max_frame_size = max_frame_size;
-}
-
-void ezgrpc2_server_settings_set_max_concurrent_streams(ezgrpc2_server_settings_t *server_settings, size_t max_concurrent_streams) {
-  server_settings->max_concurrent_streams = max_concurrent_streams;
+void ezgrpc2_server_settings_set_max_connections(ezgrpc2_server_settings_t *server_settings, size_t max_connections) {
+  server_settings->max_connections = max_connections;
 }
 //void ezgrpc2_server_settings_set_write_callback(ezgrpc2_server_settings_t *server_settings,
 //    ssize_t (*write)(void *sock, void *buf, size_t len, int flags)

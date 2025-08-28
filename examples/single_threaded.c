@@ -81,7 +81,7 @@ static void handle_event_message(ezgrpc2_event_t *event,
       /* This is unary service, but they are sending more than one message */
       ezgrpc2_session_end_stream(server, event->session_uuid,
                                  event->message.stream_id,
-                                 EZGRPC2_STATUS_INVALID_ARGUMENT);
+                                 EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
       return;
     }
   }
@@ -90,7 +90,7 @@ static void handle_event_message(ezgrpc2_event_t *event,
     case 0:
      /* ok */
       if (event->message.end_stream)
-        ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_STATUS_OK);
+        ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
       break;
     case 1:
       break;
@@ -107,7 +107,7 @@ static void handle_event_message(ezgrpc2_event_t *event,
 static void handle_event_dataloss(ezgrpc2_event_t *event,
                                  struct path_userdata_t *path_userdata,
                                  ezgrpc2_server_t *server) {
-   ezgrpc2_session_end_stream(server, event->session_uuid, event->dataloss.stream_id, EZGRPC2_STATUS_DATA_LOSS);
+   ezgrpc2_session_end_stream(server, event->session_uuid, event->dataloss.stream_id, EZGRPC2_GRPC_STATUS_DATA_LOSS);
 }
 
 static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths,
@@ -207,7 +207,7 @@ int main() {
 
 
   /* The heart of this API */
-  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL);
+  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL, NULL);
   assert(server != NULL);
 
 

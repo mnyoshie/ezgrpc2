@@ -3,6 +3,12 @@
 #include <string.h>
 #include <nghttp2/nghttp2.h>
 
+#ifdef _WIN32
+#include <Rpc.h>
+#else
+#include <uuid/uuid.h>
+#endif
+
 #include "ansicolors.h"
 #include "common.h"
 #include "ezgrpc2_path.h"
@@ -10,6 +16,8 @@
 #include "ezgrpc2_server_settings.h"
 #include "ezgrpc2_server_settings_struct.h"
 #include "ezgrpc2_message.h"
+#include "ezgrpc2_http2_settings.h"
+#include "ezgrpc2_http2_settings_struct.h"
 #include "ezgrpc2_header.h"
 
 #ifdef _WIN32
@@ -90,6 +98,7 @@ struct ezgrpc2_stream_t {
 
   /* stores `:path` */
   ezgrpc2_path_t *path;
+  size_t path_index;
 
   /* recv_data */
   size_t recv_len;
@@ -101,19 +110,21 @@ struct ezgrpc2_stream_t {
 
 typedef struct ezgrpc2_session_t ezgrpc2_session_t;
 struct ezgrpc2_session_t {
-  ezgrpc2_session_uuid_t *session_uuid;
-
+  nghttp2_session *ngsession;
 #ifdef _WIN32
+  UUID session_uuid;
   SOCKET sockfd;
   int socklen;
 #else
+  uuid_t session_uuid;
   int sockfd;
   socklen_t socklen;
 #endif
 
-  struct sockaddr_storage sockaddr;
 
-  nghttp2_session *ngsession;
+  struct sockaddr_storage sockaddr;
+  ezgrpc2_list_t *levents;
+
 
   /* an ASCII string */
   char client_addr[64];
@@ -133,7 +144,8 @@ struct ezgrpc2_session_t {
 
   /* A pointer to the settings in ezgrpc2_server_t.settings
    */
-  ezgrpc2_server_settings_t server_settings;
+  ezgrpc2_http2_settings_t server_http2_settings;
+  ezgrpc2_http2_settings_t client_http2_settings;
 
   //size_t nb_open_streams;
   /* the streams in a linked lists. allocated when we are
@@ -146,6 +158,7 @@ struct ezgrpc2_session_t {
 struct ezgrpc2_server_t {
   nghttp2_session *ngsession;
   ezgrpc2_server_settings_t server_settings;
+  ezgrpc2_http2_settings_t http2_settings;
   u16 ipv4_port;
   u16 ipv6_port;
 

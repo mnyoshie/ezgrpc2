@@ -12,6 +12,7 @@
 
 #include "ezgrpc2_event.h"
 #include "ezgrpc2_global.h"
+#include "ezgrpc2_http2_settings.h"
 #include "ezgrpc2_list_event.h"
 #include "ezgrpc2_list_message.h"
 #include "ezgrpc2_server_settings.h"
@@ -74,14 +75,15 @@ ezgrpc2_server_t *ezgrpc2_server_new(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
   int backlog,
-  ezgrpc2_server_settings_t *server_settings);
+  ezgrpc2_server_settings_t *server_settings,
+  ezgrpc2_http2_settings_t *http2_settings);
 
 
 /**
  * The :c:func:`ezgrpc2_server_poll()` function polls the server for any clients making a request to paths
  * appointed by ``paths``.
  *
- * If the requested path by the client is not found, a trailer, :c:enumerator:`EZGRPC2_STATUS_UNIMPLEMENTED`
+ * If the requested path by the client is not found, a trailer, :c:enumerator:`EZGRPC2_GRPC_STATUS_UNIMPLEMENTED`
  * is automatically sent and closes the associated stream. No event is generated.
  *
  * :returns:

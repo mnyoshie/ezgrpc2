@@ -285,8 +285,8 @@ static void session_free(ezgrpc2_session_t *ezsession) {
   while ((ezstream = ezgrpc2_list_pop_front(ezsession->lstreams)) != NULL)
     stream_free(ezstream);
 
-  ezgrpc2_session_uuid_free(ezsession->session_uuid);
-  ezsession->session_uuid = NULL;
+  //ezgrpc2_session_uuid_free(ezsession->session_uuid);
+  //ezsession->session_uuid = NULL;
 
   memset(ezsession, 0, sizeof(*ezsession));
 }
@@ -299,8 +299,8 @@ static void session_free(ezgrpc2_session_t *ezsession) {
 
 
 static ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid_t *session_uuid) {
-  for (size_t i = 0; i < nb_ezsessions; i++)
-    if (ezgrpc2_session_uuid_is_equal(ezsessions[i].session_uuid, session_uuid))
+  for (size_t i = 0; i < nb_ezsessions; i++) 
+    if (ezgrpc2_session_uuid_is_equal(&ezsessions[i].session_uuid, session_uuid))
       return ezsessions + i;
 
   return NULL;
@@ -334,7 +334,7 @@ static int session_create(
     shutdown(sockfd, SHUT_RDWR);
     assert(0);  // TODO
   }
-  memcpy(&ezsession->server_settings, &server->server_settings, sizeof(ezgrpc2_server_settings_t));
+  memcpy(&ezsession->server_http2_settings, &server->http2_settings, sizeof(ezgrpc2_server_settings_t));
 
 
   /**********************.
@@ -351,9 +351,9 @@ static int session_create(
 
   /* 16kb frame size */
   nghttp2_settings_entry siv[] = {
-      {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, ezsession->server_settings.initial_window_size},
-      {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, ezsession->server_settings.max_frame_size},
-      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, ezsession->server_settings.max_concurrent_streams},
+      {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, ezsession->server_http2_settings.initial_window_size},
+      {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, ezsession->server_http2_settings.max_frame_size},
+      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, ezsession->server_http2_settings.max_concurrent_streams},
   };
   res =
       nghttp2_submit_settings(ezsession->ngsession, NGHTTP2_FLAG_NONE, siv, 2);
@@ -404,7 +404,12 @@ static int session_create(
   }
   /*  all seems to be successful. set the following */
   ezsession->lstreams = ezgrpc2_list_new(NULL);
-  ezsession->session_uuid = ezgrpc2_session_uuid_new(NULL);
+#ifdef _WIN32
+  RPC_STATUS res = UuidCreate(&ezsession->session_uuid);
+  assert(res == RPC_S_OK);
+#else
+  uuid_generate_random(ezsession->session_uuid);
+#endif
   //ezsession->alive = 1;
 
   return res;
@@ -545,7 +550,8 @@ ezgrpc2_server_t *ezgrpc2_server_new(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
   int backlog,
-  ezgrpc2_server_settings_t *server_settings) {
+  ezgrpc2_server_settings_t *server_settings,
+  ezgrpc2_http2_settings_t *http2_settings) {
   struct sockaddr_in ipv4_saddr = {0};
   struct sockaddr_in6 ipv6_saddr = {0};
   ezgrpc2_server_t *server = NULL;
@@ -689,6 +695,14 @@ ezgrpc2_server_t *ezgrpc2_server_new(
     ezgrpc2_server_settings_free(server_settings_);
   } else {
     memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings_t));
+  }
+
+  if (http2_settings == NULL) {
+    ezgrpc2_http2_settings_t *http2_settings_= ezgrpc2_http2_settings_new(NULL);
+    memcpy(&server->http2_settings, http2_settings_, sizeof(ezgrpc2_http2_settings_t));
+    ezgrpc2_http2_settings_free(http2_settings_);
+  } else {
+    memcpy(&server->http2_settings, http2_settings, sizeof(ezgrpc2_http2_settings_t));
   }
   /* start accepting connections */
 

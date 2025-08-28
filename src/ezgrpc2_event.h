@@ -15,6 +15,8 @@ typedef enum ezgrpc2_event_type_t ezgrpc2_event_type_t;
  * Types of events 
  */
 enum ezgrpc2_event_type_t {
+  EZGRPC2_EVENT_CONNECT,
+  EZGRPC2_EVENT_DISCONNECT,
   EZGRPC2_EVENT_MESSAGE,
   EZGRPC2_EVENT_CANCEL,
   EZGRPC2_EVENT_DATALOSS
@@ -55,6 +57,8 @@ struct ezgrpc2_event_t {
   ezgrpc2_session_uuid_t *session_uuid;
 
   ezgrpc2_event_type_t type;
+
+  size_t path_index;
 
   /**
    * Anonymous union
