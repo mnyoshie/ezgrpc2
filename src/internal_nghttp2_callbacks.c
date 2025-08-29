@@ -390,6 +390,7 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
    // ezgrpc2_session_end_stream(ezsession, ezstream->stream_id, EZGRPC2_GRPC_STATUS_UNIMPLEMENTED);
     return 0;
   }
+
   atlog("ret id %d\n", frame->hd.stream_id);
   return 0;
 }
@@ -501,8 +502,9 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
         .stream_id = frame->hd.stream_id,
       })
     );
+    event->path_index = ezstream->path_index;
 
-    ezgrpc2_list_push_back(ezstream->path->levents, event);
+    ezgrpc2_list_push_back(ezsession->levents, event);
   }
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
     /* we've receaived an end stream but last message is truncated */
@@ -514,8 +516,9 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
         .stream_id = ezstream->stream_id,
       })
     );
+    event->path_index = ezstream->path_index;
   
-    ezgrpc2_list_push_back(ezstream->path->levents, event);
+    ezgrpc2_list_push_back(ezsession->levents, event);
     //event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
   }
   return 0;

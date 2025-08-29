@@ -15,15 +15,21 @@ To be determine.
 
 ## Architecture
 
-This architecture was inspired by `poll(2)`, but instead of polling fds and returning events
-such as POLLIN, you poll a lists of paths and it gives events of `EVENT_MESSAGE`,
-`EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids. In essence, you need process
-this event struct:
+This architecture was inspired by `poll(2)`, but instead of polling fds
+and returning events such as POLLIN, you poll a lists of paths and it
+gives events of `EVENT_CONNECT`, `EVENT_DISCONNECT`, `EVENT_MESSAGE`,
+`EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids. In essence,
+you need process this event struct:
 ```c
 struct ezgrpc2_event_t {
 
   ezgrpc2_session_uuid_t *session_uuid;
   ezgrpc2_event_type_t type;
+
+  /* when type is EVENT_CONNECT or EVENT_DISCONNECT, ignore
+   * path_index and the rest in the anonymous union.
+   */
+  size_t path_index;
   union {
     ezgrpc2_event_message_t message;
     ezgrpc2_event_dataloss_t dataloss;
@@ -67,20 +73,20 @@ Setting up service:
 const int nb_paths = 1;
 ezgrpc2_path_t paths[nb_paths];
 paths[0].paths = "/test.yourAPI/whatever_service";
-paths[0].levents = ezgrpc2_list_new(NULL);
 ```
 
 Polling for events:
 ```c
+ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
 int timeout = 10000;
-int res = ezgrpc2_server_poll(server, paths, nb_paths, timeout);
+int res = ezgrpc2_server_poll(server, levents, nb_paths, timeout);
 ```
 
 Handle events:
 ```c
 if (res > 0) {
   ezgrpc2_event_t *event;
-  while ((event = ezgrpc2_list_pop_front(paths[0].levents)) != NULL) {
+  while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     switch (event->type) {
     case EZGRPC2_EVENT_MESSAGE: {
       printf("event message on stream id %d\n", event->message.stream_id);
@@ -127,6 +133,20 @@ ezgrpc2_server_free(server);
 
 see `https://github.com/mnyoshie/ezgrpc2/blob/master/examples` for a complete
 MWE server.
+
+## About streaming and unary services
+
+The EZgRPC2 server library have no such concept of streaming or unary
+services and that all it knows is to accept messages if it exists in
+the `path` we're polling using `ezgrpc2_server_poll()`. But, you can
+enforce that a service is unary by ending the stream with the status
+`EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT` if the number of messages is greater than
+1.
+
+Even though the HTTP2 standard permits closing a stream with an empty DATA
+frame, this is illegal in EZgRPC2, because if a service is unary, it might
+be misunderstood that further messages will be received in that stream.
+
 
 ## License
 ```

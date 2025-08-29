@@ -16,13 +16,5 @@ struct ezgrpc2_path_t {
    * User defined userdata
    */
   void *userdata;
-
-  /**
-   * This is a list of :c:struct:`ezgrpc2_event_t` and it
-   * contains events for this specific path.
-   *
-   * Cast the return of :c:func:`ezgrpc2_list_pop_first()` to a pointer to :c:struct:`ezgrpc2_event_t` when its argument id ``levents``
-   */
-  ezgrpc2_list_t *levents;
 };
 #endif

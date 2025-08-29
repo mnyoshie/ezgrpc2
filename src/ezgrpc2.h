@@ -102,6 +102,7 @@ ezgrpc2_server_t *ezgrpc2_server_new(
  */
 int ezgrpc2_server_poll(
   ezgrpc2_server_t *server,
+  ezgrpc2_list_t *levents,
   ezgrpc2_path_t *paths,
   size_t nb_paths,
   int timeout);

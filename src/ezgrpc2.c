@@ -278,6 +278,10 @@ static EZNFDS get_unused_pollfd_ndx(struct pollfd *fds, EZNFDS nb_fds) {
 
 
 static void session_free(ezgrpc2_session_t *ezsession) {
+  ezgrpc2_event_t *event = ezgrpc2_event_new(EZGRPC2_EVENT_DISCONNECT, 
+      ezgrpc2_session_uuid_copy(&ezsession->session_uuid));
+  ezgrpc2_list_push_back(ezsession->levents, event);
+
   nghttp2_session_terminate_session(ezsession->ngsession, 0);
   nghttp2_session_del(ezsession->ngsession);
 
@@ -416,7 +420,7 @@ static int session_create(
 }
 
 
-static int session_add(ezgrpc2_server_t *ezserver, int listenfd) {
+static int session_add(ezgrpc2_server_t *ezserver, ezgrpc2_list_t *levents, int listenfd) {
   struct sockaddr_storage sockaddr;
   struct pollfd *fds = ezserver->fds;
   EZNFDS nb_fds = ezserver->nb_fds;
@@ -446,6 +450,10 @@ static int session_add(ezgrpc2_server_t *ezserver, int listenfd) {
     close(confd);
     return 1;
   }
+  ezgrpc2_event_t *event = ezgrpc2_event_new(EZGRPC2_EVENT_CONNECT, 
+      ezgrpc2_session_uuid_copy(&ezserver->sessions[ndx].session_uuid));
+  ezgrpc2_list_push_back(levents, event);
+
   fds[ndx].fd = confd;
   fds[ndx].events = POLLIN | POLLRDHUP;
   return 0;
@@ -724,9 +732,11 @@ err:
 
 int ezgrpc2_server_poll(
   ezgrpc2_server_t *server,
+  ezgrpc2_list_t *levents,
   ezgrpc2_path_t *paths,
   size_t nb_paths,
   int timeout) {
+  assert(levents != NULL);
   struct pollfd *fds = server->fds;
   const EZNFDS nb_fds = server->nb_fds;
 
@@ -736,10 +746,10 @@ int ezgrpc2_server_poll(
 
     // add ipv4 session
   if (fds[0].revents & POLLIN)
-    session_add(server, fds[0].fd);
+    session_add(server, levents, fds[0].fd);
   // add ipv6 session
   if (fds[1].revents & POLLIN)
-    session_add(server, fds[1].fd);
+    session_add(server, levents, fds[1].fd);
 
   for (EZNFDS i = 2; i < nb_fds; i++) {
     if (fds[i].fd != -1 && fds[i].revents & (POLLRDHUP | POLLERR)) {
@@ -753,6 +763,7 @@ int ezgrpc2_server_poll(
     if (fds[i].fd != -1 && fds[i].revents & POLLIN) {
       server->sessions[i].nb_paths = nb_paths;
       server->sessions[i].paths = paths;
+      server->sessions[i].levents = levents;
       if (session_events(&server->sessions[i])) {
         if (close(server->sessions[i].sockfd)) {
           perror("close");

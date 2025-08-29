@@ -180,31 +180,33 @@ static void handle_event_dataloss(ezgrpc2_event_t *event,
 
 }
 
-static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths,
-                          size_t nb_paths, ezgrpc2_pthpool_t *opool,
+static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezgrpc2_path_t *paths,
+                          ezgrpc2_pthpool_t *opool,
                           ezgrpc2_pthpool_t *upool) {
   ezgrpc2_event_t *event;
-  struct userdata_t *data = NULL;
-  struct path_userdata_t *path_userdata = NULL;
   /* check for events in the paths */
-  for (size_t i = 0; i < nb_paths; i++) {
-    path_userdata = paths[i].userdata;
-    while ((event = ezgrpc2_list_pop_front(paths[i].levents)) != NULL) {
-      switch (event->type) {
-      case EZGRPC2_EVENT_MESSAGE:
-        handle_event_message(event, path_userdata, server, opool, upool);
-        break;
-      case EZGRPC2_EVENT_DATALOSS:
-        handle_event_dataloss(event, path_userdata, server, opool, upool);
-        break;
-      case EZGRPC2_EVENT_CANCEL:
-        printf("event cancel on stread %d\n\n", event->cancel.stream_id);
-        // FIXME: HANDLE ME
-        break;
-      } /* switch */
-      ezgrpc2_event_free(event);
-    } /* while() */
-  } /* for() */
+  while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
+    switch (event->type) {
+    case EZGRPC2_EVENT_MESSAGE:
+      handle_event_message(event, paths[event->path_index].userdata, server, opool, upool);
+      break;
+    case EZGRPC2_EVENT_DATALOSS:
+      handle_event_dataloss(event, paths[event->path_index].userdata, server, opool, upool);
+      break;
+    case EZGRPC2_EVENT_CANCEL:
+      printf("event cancel on stread %d\n\n", event->cancel.stream_id);
+      // FIXME: HANDLE ME
+      break;
+    case EZGRPC2_EVENT_CONNECT:
+      printf("event connect");
+      break;
+    case EZGRPC2_EVENT_DISCONNECT:
+      printf("event disconnect");
+      break;
+    
+    } /* switch */
+    ezgrpc2_event_free(event);
+  } /* while() */
 }
 
 static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool) {
@@ -350,8 +352,6 @@ int main() {
   paths[0].path = "/test.yourAPI/whatever_service1";
   paths[1].path = "/test.yourAPI/whatever_service2";
 
-  paths[0].levents = ezgrpc2_list_new(NULL);
-  paths[1].levents = ezgrpc2_list_new(NULL);
   /* we expect to receive one or more grpc message in a
    * single stream.
    * */
@@ -391,6 +391,7 @@ int main() {
   //    4. Send the results. (give the result to the client)
 
 
+  ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
   while (1) {
 #ifdef __unix__
     // if sigterm flag has been set by the signal handler, break the loop and kill
@@ -407,13 +408,13 @@ int main() {
      */
     int timeout = is_pool_empty ? 10000 : 10;
     // step 1. server poll
-    if ((res = ezgrpc2_server_poll(server, paths, nb_paths, timeout)) < 0)
+    if ((res = ezgrpc2_server_poll(server, levents, paths, nb_paths, timeout)) < 0)
       break;
 
     if (res > 0) {
       puts("incoming events");
       // step 2. Give the task to the thread pool
-      handle_events(server, paths, nb_paths, ordered_pool, unordered_pool);
+      handle_events(server, levents, paths, ordered_pool, unordered_pool);
     }
     else if (res == 0) {
       printf("no event\n");
@@ -431,8 +432,6 @@ int main() {
 
   ezgrpc2_server_free(server);
   /* we aee aure these are enpty because we did not poll at break */
-  ezgrpc2_list_free(paths[0].levents);
-  ezgrpc2_list_free(paths[1].levents);
   ezgrpc2_pthpool_free(ordered_pool);
   ezgrpc2_pthpool_free(unordered_pool);
 

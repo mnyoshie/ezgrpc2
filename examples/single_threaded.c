@@ -1,9 +1,6 @@
 /* The author disclaims copyright to this source code
  * and releases it into the public domain.
  *
- * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  */
 #include <stdio.h>
 #include <string.h>
@@ -110,30 +107,31 @@ static void handle_event_dataloss(ezgrpc2_event_t *event,
    ezgrpc2_session_end_stream(server, event->session_uuid, event->dataloss.stream_id, EZGRPC2_GRPC_STATUS_DATA_LOSS);
 }
 
-static void handle_events(ezgrpc2_server_t *server, ezgrpc2_path_t *paths,
+static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezgrpc2_path_t *paths,
                           size_t nb_paths) {
   ezgrpc2_event_t *event;
-  struct userdata_t *data = NULL;
-  struct path_userdata_t *path_userdata = NULL;
   /* check for events in the paths */
-  for (size_t i = 0; i < nb_paths; i++) {
-    path_userdata = paths[i].userdata;
-    while ((event = ezgrpc2_list_pop_front(paths[i].levents)) != NULL) {
-      switch (event->type) {
-      case EZGRPC2_EVENT_MESSAGE:
-        handle_event_message(event, path_userdata, server);
-        break;
-      case EZGRPC2_EVENT_DATALOSS:
-        handle_event_dataloss(event, path_userdata, server);
-        break;
-      case EZGRPC2_EVENT_CANCEL:
-        printf("event cancel on stread %d\n\n", event->cancel.stream_id);
-        // FIXME: HANDLE ME
-        break;
-      } /* switch */
-      ezgrpc2_event_free(event);
-    } /* while() */
-  } /* for() */
+  while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
+    switch (event->type) {
+    case EZGRPC2_EVENT_MESSAGE:
+      handle_event_message(event, paths[event->path_index].userdata, server);
+      break;
+    case EZGRPC2_EVENT_DATALOSS:
+      handle_event_dataloss(event, paths[event->path_index].userdata, server);
+      break;
+    case EZGRPC2_EVENT_CANCEL:
+      printf("event cancel on stread %d\n\n", event->cancel.stream_id);
+      // FIXME: HANDLE ME
+      break;
+    case EZGRPC2_EVENT_CONNECT:
+      printf("event connect");
+      break;
+    case EZGRPC2_EVENT_DISCONNECT:
+      printf("event disconnect");
+      break;
+    } /* switch */
+    ezgrpc2_event_free(event);
+  } /* while() */
 }
 
 
@@ -173,9 +171,7 @@ int main() {
   /* In a real application, user must configure the server
    * to handle SIGTERM, and make sure to prevent these
    * signal from propagating through the main threads and
-   * pool threads via pthread_sigmask(SIG_BLOCK, ...) for
-   * the signal handler and pthread_sigmask(SIG_SETMASK, ...)
-   * for the rest. 
+   * pool threads via pthread_sigmask()
    */
   sigset_t sigset;
   sigemptyset(&sigset);
@@ -218,8 +214,6 @@ int main() {
   paths[0].path = "/test.yourAPI/whatever_service1";
   paths[1].path = "/test.yourAPI/whatever_service2";
 
-  paths[0].levents = ezgrpc2_list_new(NULL);
-  paths[1].levents = ezgrpc2_list_new(NULL);
   /* we expect to receive one or more grpc message in a
    * single stream.
    * */
@@ -258,7 +252,7 @@ int main() {
   //    3. Get finish tasks from the thread pool (thread pool poll)
   //    4. Send the results. (give the result to the client)
 
-
+  ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
   while (1) {
 #ifdef __unix__
     // if sigterm flag has been set by the signal handler, break the loop and kill
@@ -274,13 +268,13 @@ int main() {
     int timeout = 10000;
 
     // step 1. server poll
-    if ((res = ezgrpc2_server_poll(server, paths, nb_paths, timeout)) < 0)
+    if ((res = ezgrpc2_server_poll(server, levents, paths, nb_paths, timeout)) < 0)
       break;
 
     if (res > 0) {
       puts("incoming events");
       // step 2. Give the task to the thread pool
-      handle_events(server, paths, nb_paths);
+      handle_events(server, levents, paths, nb_paths);
     }
     else if (res == 0) {
       printf("no event\n");
@@ -295,8 +289,6 @@ int main() {
 
   ezgrpc2_server_free(server);
   /* we aee aure these are enpty because we did not poll at break */
-  ezgrpc2_list_free(paths[0].levents);
-  ezgrpc2_list_free(paths[1].levents);
   ezgrpc2_global_cleanup();
 
   return res;
