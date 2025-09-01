@@ -45,7 +45,7 @@ Linux dependencies: `nghttp2 pthreads libuuid`
 Windows dependencies: `nghttp2 pthreads`
 
 Once the dependencies are installed, building on Linux and Windows (msys2
-ucrt64) are pretty much the same. Run good'ol make:
+ucrt64) are pretty much the same. Run make:
 ```
 make
 ```
@@ -65,7 +65,7 @@ Creating a server:
 ```c
 uint16_t port = 19009;
 int backlog = 16;
-ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, backlog, NULL);
+ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, backlog, NULL, NULL);
 ```
 
 Setting up service:
@@ -139,13 +139,13 @@ MWE server.
 The EZgRPC2 server library have no such concept of streaming or unary
 services and that all it knows is to accept messages if it exists in
 the `path` we're polling using `ezgrpc2_server_poll()`. But, you can
-enforce that a service is unary by ending the stream with the status
-`EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT` if the number of messages is greater than
-1.
+enforce that a service is unary by ending the stream immediately with the status
+`EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT` if you received more than one messages.
 
 Even though the HTTP2 standard permits closing a stream with an empty DATA
 frame, this is illegal in EZgRPC2, because if a service is unary, it might
-be misunderstood that further messages will be received in that stream.
+be misunderstood that further messages will be received in that stream
+and get immediately closed with `EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT`.
 
 
 ## License

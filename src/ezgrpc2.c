@@ -367,13 +367,13 @@ static int session_create(
 
   if (makenonblock(sockfd)) assert(0);
 
-  res = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (int *)&(int){1},
+  res = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *)&(int){1},
                    sizeof(int));
   if (res < 0) {
     assert(0);  // TODO
   }
 
-  res = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (int *)&(int){1},
+  res = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&(int){1},
                    sizeof(int));
   if (res < 0) {
     assert(0);  // TODO
@@ -409,8 +409,8 @@ static int session_create(
   /*  all seems to be successful. set the following */
   ezsession->lstreams = ezgrpc2_list_new(NULL);
 #ifdef _WIN32
-  RPC_STATUS res = UuidCreate(&ezsession->session_uuid);
-  assert(res == RPC_S_OK);
+  RPC_STATUS wres = UuidCreate(&ezsession->session_uuid);
+  assert(wres == RPC_S_OK);
 #else
   uuid_generate_random(ezsession->session_uuid);
 #endif
@@ -609,7 +609,7 @@ ezgrpc2_server_t *ezgrpc2_server_new(
       goto err;
     }
 
-    if (setsockopt(ipv4_sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1},
+    if (setsockopt(ipv4_sockfd, SOL_SOCKET, SO_REUSEADDR, (void*)&(int){1},
                    sizeof(int))) {
       perror("setsockopt ipv4");
       goto err;

@@ -4,28 +4,12 @@
 #include <nghttp2/nghttp2.h>
 
 #ifdef _WIN32
-#include <Rpc.h>
-#else
-#include <uuid/uuid.h>
-#endif
-
-#include "ansicolors.h"
-#include "common.h"
-#include "ezgrpc2_path.h"
-#include "ezgrpc2_session_uuid.h"
-#include "ezgrpc2_server_settings.h"
-#include "ezgrpc2_server_settings_struct.h"
-#include "ezgrpc2_message.h"
-#include "ezgrpc2_http2_settings.h"
-#include "ezgrpc2_http2_settings_struct.h"
-#include "ezgrpc2_header.h"
-
-#ifdef _WIN32
-#  include <ws2tcpip.h>
 #  include <winsock2.h>
+#  include <ws2tcpip.h>
 #  include <windows.h>
-#  include "wepoll.h"
+#  include <Rpc.h>
 
+#  include "wepoll.h"
 #  define ssize_t int
 #  define SHUT_RDWR SD_BOTH
 #  define POLLRDHUP 0
@@ -46,7 +30,8 @@ static char *strndup(char *c, size_t n) {
 #define EZINVALID_SOCKET  INVALID_SOCKET
 #define EZSOCKET_ERROR    SOCKET_ERROR
 #define EZSOCKLEN         int
-#else /* __unix__ */
+#else
+#  include <uuid/uuid.h>
 #  include <arpa/inet.h>
 #  include <byteswap.h>
 #  include <fcntl.h>
@@ -64,7 +49,18 @@ static char *strndup(char *c, size_t n) {
 #define EZINVALID_SOCKET  (-1)
 #define EZSOCKET_ERROR    (-1)
 #define EZSOCKLEN         socklen_t
-#endif /* _WIN32/__unix__ */
+#endif /* _WIN32/elae */
+
+#include "ansicolors.h"
+#include "common.h"
+#include "ezgrpc2_path.h"
+#include "ezgrpc2_session_uuid.h"
+#include "ezgrpc2_server_settings.h"
+#include "ezgrpc2_server_settings_struct.h"
+#include "ezgrpc2_message.h"
+#include "ezgrpc2_http2_settings.h"
+#include "ezgrpc2_http2_settings_struct.h"
+#include "ezgrpc2_header.h"
 
 
 /* stores the values of a SETTINGS frame */

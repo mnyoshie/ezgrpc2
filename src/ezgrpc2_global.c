@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "ezgrpc2_global.h"
 #ifdef _WIN32
 #include <Winsock2.h>
