@@ -168,6 +168,7 @@ struct ezgrpc2_server_t {
   nfds_t nb_fds;
 #endif
 
+  int epollfd;
   /* fds[0] reserve for ipv4 listen sockfd */
   /* fds[1] reserve for ipv6 listen sockfd */
   /* the rest are for client use */

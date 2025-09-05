@@ -589,6 +589,23 @@ ezgrpc2_server_t *ezgrpc2_server_new(
     assert(server->ipv6_addr != NULL);
   }
 
+  if (server_settings == NULL) {
+    ezgrpc2_server_settings_t *server_settings_ = ezgrpc2_server_settings_new(NULL);
+    assert(server_settings_ != NULL);
+    memcpy(&server->server_settings, server_settings_, sizeof(ezgrpc2_server_settings_t));
+    ezgrpc2_server_settings_free(server_settings_);
+  } else {
+    memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings_t));
+  }
+
+  if (http2_settings == NULL) {
+    ezgrpc2_http2_settings_t *http2_settings_= ezgrpc2_http2_settings_new(NULL);
+    memcpy(&server->http2_settings, http2_settings_, sizeof(ezgrpc2_http2_settings_t));
+    ezgrpc2_http2_settings_free(http2_settings_);
+  } else {
+    memcpy(&server->http2_settings, http2_settings, sizeof(ezgrpc2_http2_settings_t));
+  }
+
   /* shutdown fd + ipv4 fd listener + ipv6 fd listener */
   /**********************.
   |     INIT SOCKET      |
@@ -673,11 +690,10 @@ ezgrpc2_server_t *ezgrpc2_server_new(
           server->ipv6_port);
   }
 
-#define MAX_CON_CLIENTS 1022
-  server->nb_sessions = MAX_CON_CLIENTS + 2;
-  server->sessions = calloc(MAX_CON_CLIENTS + 2, sizeof(*server->sessions));
+  server->nb_sessions = server->server_settings.max_connections + 2;
+  server->sessions = calloc(server->server_settings.max_connections + 2, sizeof(*server->sessions));
 
-  server->nb_fds = MAX_CON_CLIENTS + 2;
+  server->nb_fds = server->server_settings.max_connections + 2;
   server->fds = calloc(server->nb_fds, sizeof(*(server->fds)));
   if (server->fds == NULL)
     goto err;
@@ -692,26 +708,6 @@ ezgrpc2_server_t *ezgrpc2_server_new(
   }
 
 
-#ifdef _WIN32
-  WSACleanup();
-#endif
-
-  if (server_settings == NULL) {
-    ezgrpc2_server_settings_t *server_settings_ = ezgrpc2_server_settings_new(NULL);
-    assert(server_settings_ != NULL);
-    memcpy(&server->server_settings, server_settings_, sizeof(ezgrpc2_server_settings_t));
-    ezgrpc2_server_settings_free(server_settings_);
-  } else {
-    memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings_t));
-  }
-
-  if (http2_settings == NULL) {
-    ezgrpc2_http2_settings_t *http2_settings_= ezgrpc2_http2_settings_new(NULL);
-    memcpy(&server->http2_settings, http2_settings_, sizeof(ezgrpc2_http2_settings_t));
-    ezgrpc2_http2_settings_free(http2_settings_);
-  } else {
-    memcpy(&server->http2_settings, http2_settings, sizeof(ezgrpc2_http2_settings_t));
-  }
   /* start accepting connections */
 
   return server;
