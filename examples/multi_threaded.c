@@ -188,10 +188,10 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezg
   while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     switch (event->type) {
     case EZGRPC2_EVENT_MESSAGE:
-      handle_event_message(event, paths[event->path_index].userdata, server, opool, upool);
+      handle_event_message(event, paths[event->message.path_index].userdata, server, opool, upool);
       break;
     case EZGRPC2_EVENT_DATALOSS:
-      handle_event_dataloss(event, paths[event->path_index].userdata, server, opool, upool);
+      handle_event_dataloss(event, paths[event->dataloss.path_index].userdata, server, opool, upool);
       break;
     case EZGRPC2_EVENT_CANCEL:
       printf("event cancel on stread %d\n\n", event->cancel.stream_id);

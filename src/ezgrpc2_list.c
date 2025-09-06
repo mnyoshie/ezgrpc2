@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include "core.h"
 #include "ezgrpc2_list.h"
 
 typedef struct node_t node_t;
@@ -20,7 +21,7 @@ struct ezgrpc2_list_t {
   size_t count;
 };
 
-ezgrpc2_list_t *ezgrpc2_list_new(void *unused) {
+EZGRPC2_API ezgrpc2_list_t *ezgrpc2_list_new(void *unused) {
   ezgrpc2_list_t *ezlist = malloc(sizeof(*ezlist));
   ezlist->front = NULL;
   ezlist->back = NULL;
@@ -28,12 +29,12 @@ ezgrpc2_list_t *ezgrpc2_list_new(void *unused) {
   return ezlist;
 }
 
-void ezgrpc2_list_free(ezgrpc2_list_t *ezlist) {
+EZGRPC2_API void ezgrpc2_list_free(ezgrpc2_list_t *ezlist) {
   free(ezlist);
 }
 
 /* appends to the last element */
-int ezgrpc2_list_push_back(ezgrpc2_list_t *ezlist, void *data) {
+EZGRPC2_API int ezgrpc2_list_push_back(ezgrpc2_list_t *ezlist, void *data) {
   assert(ezlist != NULL);
   node_t *new_node = malloc(sizeof(*new_node));
   new_node->data = data;
@@ -54,7 +55,7 @@ int ezgrpc2_list_push_back(ezgrpc2_list_t *ezlist, void *data) {
 }
 
 /* inserts to the first element */
-int ezgrpc2_list_push_front(ezgrpc2_list_t *ezlist, void *data) {
+EZGRPC2_API int ezgrpc2_list_push_front(ezgrpc2_list_t *ezlist, void *data) {
   assert(ezlist != NULL);
   node_t *new_node = malloc(sizeof(*new_node));
   new_node->data = data;
@@ -71,7 +72,7 @@ int ezgrpc2_list_push_front(ezgrpc2_list_t *ezlist, void *data) {
 }
 
 /* removes last element */
-void *ezgrpc2_list_pop_back(ezgrpc2_list_t *ezlist) {
+EZGRPC2_API void *ezgrpc2_list_pop_back(ezgrpc2_list_t *ezlist) {
   assert(ezlist != NULL);
   void *data;
   if (!ezlist->count)
@@ -93,7 +94,7 @@ void *ezgrpc2_list_pop_back(ezgrpc2_list_t *ezlist) {
 }
 
 /* pop front */
-void *ezgrpc2_list_pop_front(ezgrpc2_list_t *ezlist) {
+EZGRPC2_API void *ezgrpc2_list_pop_front(ezgrpc2_list_t *ezlist) {
   assert(ezlist != NULL);
   if (!ezlist->count)
     return NULL;
@@ -116,15 +117,15 @@ void *ezgrpc2_list_pop_front(ezgrpc2_list_t *ezlist) {
 
 
 
-size_t ezgrpc2_list_count(ezgrpc2_list_t *ezlist) {
+EZGRPC2_API size_t ezgrpc2_list_count(ezgrpc2_list_t *ezlist) {
   return ezlist->count;
 }
 
-int ezgrpc2_list_is_empty(ezgrpc2_list_t *ezlist) {
+EZGRPC2_API int ezgrpc2_list_is_empty(ezgrpc2_list_t *ezlist) {
   return !ezlist->count;
 }
 
-void *ezgrpc2_list_find(ezgrpc2_list_t *ezlist, int (*cmp)(const void *data, const void *userdata), void *userdata) {
+EZGRPC2_API void *ezgrpc2_list_find(ezgrpc2_list_t *ezlist, int (*cmp)(const void *data, const void *userdata), void *userdata) {
   node_t *node = ezlist->front;
   while (node != NULL && cmp(node->data, userdata)) {
     node = node->next;
@@ -134,7 +135,7 @@ void *ezgrpc2_list_find(ezgrpc2_list_t *ezlist, int (*cmp)(const void *data, con
 }
 
 /* remove */
-void *ezgrpc2_list_remove(ezgrpc2_list_t *ezlist, int (*cmp)(const void *data, const void *userdata), void *userdata) {
+EZGRPC2_API void *ezgrpc2_list_remove(ezgrpc2_list_t *ezlist, int (*cmp)(const void *data, const void *userdata), void *userdata) {
   node_t *node = ezlist->front;
   void *data = NULL;
   while (node != NULL && cmp(node->data, userdata)) {
@@ -162,12 +163,12 @@ void *ezgrpc2_list_remove(ezgrpc2_list_t *ezlist, int (*cmp)(const void *data, c
 }
 
 
-void *ezgrpc2_list_peek_front(ezgrpc2_list_t *ezlist) {
+EZGRPC2_API void *ezgrpc2_list_peek_front(ezgrpc2_list_t *ezlist) {
   assert(ezlist != NULL);
   return ezlist->front != NULL ? ezlist->front->data: NULL;
 }
 
-void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list_t *dst, ezgrpc2_list_t *src) {
+EZGRPC2_API void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list_t *dst, ezgrpc2_list_t *src) {
   if (!src->count)
     return;
 
@@ -189,7 +190,7 @@ void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list_t *dst, ezgrpc2_list_t *src)
   src->count = 0;
 }
 
-void ezgrpc2_list_foreach(ezgrpc2_list_t *ezlist, void (*func)(const void *data, const void *userdata), void *userdata) {
+EZGRPC2_API void ezgrpc2_list_foreach(ezgrpc2_list_t *ezlist, void (*func)(const void *data, const void *userdata), void *userdata) {
   for (node_t *n = ezlist->front; n != NULL; n = n->next)
     func(n->data, userdata);
 

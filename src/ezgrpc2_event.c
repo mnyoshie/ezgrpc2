@@ -1,7 +1,8 @@
 #include <stdarg.h>
+#include "core.h"
 #include "ezgrpc2.h"
 
-ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...) {
+ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...) {
   va_list ap;
   va_start(ap, session_uuid);
   ezgrpc2_event_t *event = malloc(sizeof(*event));
@@ -24,7 +25,7 @@ ezgrpc2_event_t *ezgrpc2_event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uu
   return event;
 }
 
-void ezgrpc2_event_free(ezgrpc2_event_t *event) {
+EZGRPC2_API void ezgrpc2_event_free(ezgrpc2_event_t *event) {
   if (event == NULL) return;
 
   ezgrpc2_session_uuid_free(event->session_uuid);

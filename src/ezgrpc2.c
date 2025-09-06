@@ -80,7 +80,7 @@
 
 
 
-static void dump_decode_binary(i8 *data, size_t len) {
+void dump_decode_binary(i8 *data, size_t len) {
   i8 look_up[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
   for (size_t i = 0; i < len; i++) {
@@ -91,7 +91,7 @@ static void dump_decode_binary(i8 *data, size_t len) {
   }
 }
 
-static void dump_decode_ascii(i8 *data, size_t len) {
+void dump_decode_ascii(i8 *data, size_t len) {
   for (size_t i = 0; i < len; i++) {
     if (data[i] < 0x20) {
       putchar('.');
@@ -138,7 +138,7 @@ void ezdump(void *vdata, size_t len) {
 
 
 
-static i8 *ezgetdt() {
+i8 *ezgetdt() {
   static i8 buf[32] = {0};
   time_t t = time(NULL);
   struct tm stm = *localtime(&t);
@@ -153,7 +153,7 @@ static i8 *ezgetdt() {
 
 
 
-static void ezlogf(ezgrpc2_session_t *ezsession, i8 *file, int line, i8 *fmt,
+void ezlogf(ezgrpc2_session_t *ezsession, i8 *file, int line, i8 *fmt,
                    ...) {
   fprintf(logging_fp, "[%s @ %s:%d] " COLSTR("%s%s%s:%d", BHBLU) " ", ezgetdt(),
           file, line, (ezsession->sockaddr.ss_family == AF_INET6 ? "[" : ""),
@@ -180,7 +180,7 @@ void ezlog(i8 *fmt, ...) {
  * f the return value equals vec.len, then the message
  * is complete and not truncated.
  */
-static size_t count_grpc_message(void *data, size_t len, int *nb_message) {
+size_t count_grpc_message(void *data, size_t len, int *nb_message) {
   i8 *wire = (i8 *)data;
   size_t seek, last_seek = 0;
   for (seek = 0; seek < len; ) {
@@ -221,272 +221,6 @@ static size_t count_grpc_message(void *data, size_t len, int *nb_message) {
 
 
 
-static int list_cmp_ezheader_name(const void *data, const void *userdata) {
-  const ezgrpc2_header_t *a = data;
-  const ezgrpc2_header_t *b = userdata;
-  return a->nlen == b->nlen ?
-      strncasecmp(a->name, b->name,
-        a->nlen & b->nlen): 1;
-}
-
-
-
-
-
-
-
-
-static int makenonblock(int sockfd) {
-#ifdef _WIN32
-  return ioctlsocket(sockfd, FIONBIO, &(u_long){1});
-#else
-  int res = fcntl(sockfd, F_GETFL, 0);
-  if (res == -1) return 1;
-  res = (res | O_NONBLOCK);
-  return fcntl(sockfd, F_SETFL, res);
-#endif
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static EZNFDS get_unused_pollfd_ndx(struct pollfd *fds, EZNFDS nb_fds) {
-  for (EZNFDS i = 2; i < nb_fds; i++)
-    if (fds[i].fd == -1)
-      return i;
-  return -1;
-}
-
-
-
-
-
-
-
-
-static void session_free(ezgrpc2_session_t *ezsession) {
-  ezgrpc2_event_t *event = ezgrpc2_event_new(EZGRPC2_EVENT_DISCONNECT, 
-      ezgrpc2_session_uuid_copy(&ezsession->session_uuid));
-  ezgrpc2_list_push_back(ezsession->levents, event);
-
-  nghttp2_session_terminate_session(ezsession->ngsession, 0);
-  nghttp2_session_del(ezsession->ngsession);
-
-  ezgrpc2_stream_t *ezstream;
-  while ((ezstream = ezgrpc2_list_pop_front(ezsession->lstreams)) != NULL)
-    stream_free(ezstream);
-
-  //ezgrpc2_session_uuid_free(ezsession->session_uuid);
-  //ezsession->session_uuid = NULL;
-
-  memset(ezsession, 0, sizeof(*ezsession));
-}
-
-
-
-
-
-
-
-
-static ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid_t *session_uuid) {
-  for (size_t i = 0; i < nb_ezsessions; i++) 
-    if (ezgrpc2_session_uuid_is_equal(&ezsessions[i].session_uuid, session_uuid))
-      return ezsessions + i;
-
-  return NULL;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static int session_create(
-    ezgrpc2_session_t *ezsession,
-    EZSOCKET sockfd,
-    struct sockaddr_storage *sockaddr,
-    EZSOCKLEN socklen,
-    ezgrpc2_server_t *server) {
-
-  /* PREPARE NGHTTP2 */
-  nghttp2_session_callbacks *ngcallbacks;
-  int res = nghttp2_session_callbacks_new(&ngcallbacks);
-  if (res) {
-    shutdown(sockfd, SHUT_RDWR);
-    assert(0);  // TODO
-  }
-  memcpy(&ezsession->server_http2_settings, &server->http2_settings, sizeof(ezgrpc2_server_settings_t));
-
-
-  /**********************.
-  |     INIT NGHTTP2     |
-  `---------------------*/
-  server_setup_ngcallbacks(ngcallbacks);
-
-  res =
-      nghttp2_session_server_new(&ezsession->ngsession, ngcallbacks, ezsession);
-  nghttp2_session_callbacks_del(ngcallbacks);
-  if (res < 0) {
-    assert(0);  // TODO
-  }
-
-  /* 16kb frame size */
-  nghttp2_settings_entry siv[] = {
-      {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, ezsession->server_http2_settings.initial_window_size},
-      {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, ezsession->server_http2_settings.max_frame_size},
-      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, ezsession->server_http2_settings.max_concurrent_streams},
-  };
-  res =
-      nghttp2_submit_settings(ezsession->ngsession, NGHTTP2_FLAG_NONE, siv, 2);
-  if (res < 0) {
-    assert(0);  // TODO
-  }
-
-  if (makenonblock(sockfd)) assert(0);
-
-  res = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *)&(int){1},
-                   sizeof(int));
-  if (res < 0) {
-    assert(0);  // TODO
-  }
-
-  res = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&(int){1},
-                   sizeof(int));
-  if (res < 0) {
-    assert(0);  // TODO
-  }
-
-  //ezsession->shutdownfd = server_handle->shutdownfd;
-  ezsession->sockfd = sockfd;
-  ezsession->sockaddr = *sockaddr;
-  ezsession->socklen = socklen;
-  switch (sockaddr->ss_family) {
-    case AF_INET: {
-      struct sockaddr_in *sa = (struct sockaddr_in *)sockaddr;
-      inet_ntop(AF_INET, &sa->sin_addr.s_addr,
-                ezsession->client_addr, sizeof(ezsession->client_addr) - 1);
-      ezsession->client_port = sa->sin_port;
-
-//      ezsession->server_addr = server_handle->ipv4_addr;
-//      ezsession->server_port = &server_handle->ipv4_port;
-                  } break;
-    case AF_INET6: {
-      struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)sockaddr;
-      inet_ntop(AF_INET6, sa6->sin6_addr.s6_addr,
-                ezsession->client_addr, sizeof(ezsession->client_addr) - 1);
-      ezsession->client_port = sa6->sin6_port;
-
-//      ezsession->server_addr = server_handle->ipv6_addr;
-//      ezsession->server_port = &server_handle->ipv6_port;
-                   } break;
-    default:
-      fprintf(stderr, "fatal: invalid family\n");
-      return 1;
-  }
-  /*  all seems to be successful. set the following */
-  ezsession->lstreams = ezgrpc2_list_new(NULL);
-#ifdef _WIN32
-  RPC_STATUS wres = UuidCreate(&ezsession->session_uuid);
-  assert(wres == RPC_S_OK);
-#else
-  uuid_generate_random(ezsession->session_uuid);
-#endif
-  //ezsession->alive = 1;
-
-  return res;
-}
-
-
-static int session_add(ezgrpc2_server_t *ezserver, ezgrpc2_list_t *levents, int listenfd) {
-  struct sockaddr_storage sockaddr;
-  struct pollfd *fds = ezserver->fds;
-  EZNFDS nb_fds = ezserver->nb_fds;
-  EZSOCKLEN sockaddr_len;
-
-
-  sockaddr_len = sizeof(sockaddr);
-  memset(&sockaddr, 0, sizeof(sockaddr));
-  int confd = accept(listenfd, (struct sockaddr *)&sockaddr, &sockaddr_len);
-  if (confd == -1) {
-    perror("accept");
-    return 1;
-  }
-  ezlog(COLSTR("incoming %s connection\n", BHBLU), sockaddr.ss_family == AF_INET ? "ipv4" : "ipv6");
-
-  EZNFDS ndx = get_unused_pollfd_ndx(fds, nb_fds);
-  if (ndx == -1) {
-    ezlog("max clients reached\n");
-    shutdown(confd, SHUT_RDWR);
-    close(confd);
-    return 1;
-  }
-
-  if (session_create(&ezserver->sessions[ndx], confd, &sockaddr, sockaddr_len, ezserver)) {
-    atlog("session create failed\n");
-    shutdown(confd, SHUT_RDWR);
-    close(confd);
-    return 1;
-  }
-  ezgrpc2_event_t *event = ezgrpc2_event_new(EZGRPC2_EVENT_CONNECT, 
-      ezgrpc2_session_uuid_copy(&ezserver->sessions[ndx].session_uuid));
-  ezgrpc2_list_push_back(levents, event);
-
-  fds[ndx].fd = confd;
-  fds[ndx].events = POLLIN | POLLRDHUP;
-  return 0;
-}
-
-
-
-
-
-static int session_events(ezgrpc2_session_t *ezsession) {
-  int res;
-  if (!nghttp2_session_want_read(ezsession->ngsession) &&
-      !nghttp2_session_want_write(ezsession->ngsession))
-    return 1;
-
-  if (nghttp2_session_want_read(ezsession->ngsession) &&
-      (res = nghttp2_session_recv(ezsession->ngsession)))
-    if (res) {
-      ezlog(COLSTR("nghttp2: %s. killing...\n", BHRED),
-            nghttp2_strerror(res));
-      return 1;
-    }
-
-  while (nghttp2_session_want_write(ezsession->ngsession)) {
-    res = nghttp2_session_send(ezsession->ngsession);
-    if (res) {
-      ezlog(COLSTR("nghttp2: %s. killing...\n", BHRED),
-            nghttp2_strerror(res));
-      return 1;
-    }
-  }
-  return 0;
-}
 /* clang-format off */
 
 
@@ -520,30 +254,6 @@ static int session_events(ezgrpc2_session_t *ezsession) {
 | API FUNCTIONS: You will only have to care about these |
 `------------------------------------------------------*/
 
-void ezgrpc2_server_free(
-  ezgrpc2_server_t *ezserver) {
-  for (EZNFDS i = 0; i < 2; i++)
-  {
-    if (ezserver->fds[i].fd != -1) {
-      close(ezserver->fds[i].fd);
-    }
-  }
-
-  for (EZNFDS i = 2; i < ezserver->nb_fds; i++)
-  {
-    if (ezserver->fds[i].fd != -1) {
-      shutdown(ezserver->fds[i].fd, SHUT_RDWR);
-      close(ezserver->fds[i].fd);
-      session_free(&ezserver->sessions[i]);
-    }
-  }
-  free(ezserver->fds);
-    
-  free(ezserver->ipv4_addr);
-  free(ezserver->ipv6_addr);
-  free(ezserver->sessions);
-  free(ezserver);
-}
 
 
 
@@ -554,168 +264,6 @@ void ezgrpc2_server_free(
 
 
 
-ezgrpc2_server_t *ezgrpc2_server_new(
-  const char *ipv4_addr, u16 ipv4_port,
-  const char *ipv6_addr, u16 ipv6_port,
-  int backlog,
-  ezgrpc2_server_settings_t *server_settings,
-  ezgrpc2_http2_settings_t *http2_settings) {
-  struct sockaddr_in ipv4_saddr = {0};
-  struct sockaddr_in6 ipv6_saddr = {0};
-  ezgrpc2_server_t *server = NULL;
-  EZSOCKET ipv4_sockfd = EZINVALID_SOCKET;
-  EZSOCKET ipv6_sockfd = EZINVALID_SOCKET;
-
-  if (ipv4_addr == NULL && ipv6_addr == NULL)
-    return NULL;
-  if (ipv4_addr != NULL && strnlen(ipv4_addr, 16) > 15)
-    return NULL;
-  if (ipv6_addr != NULL && strnlen(ipv6_addr, 64) > 63)
-    return NULL;
-
-  server = calloc(1, sizeof(*server));
-  assert(server != NULL);
-
-  server->ipv4_addr = NULL;
-  server->ipv6_addr = NULL;
-  server->ipv4_port = ipv4_port;
-  server->ipv6_port = ipv6_port;
-  if (ipv4_addr != NULL) {
-    server->ipv4_addr = strndup(ipv4_addr, 16);
-    assert(server->ipv4_addr != NULL);
-  }
-  if (ipv6_addr != NULL) {
-    server->ipv6_addr = strndup(ipv6_addr, 64);
-    assert(server->ipv6_addr != NULL);
-  }
-
-  if (server_settings == NULL) {
-    ezgrpc2_server_settings_t *server_settings_ = ezgrpc2_server_settings_new(NULL);
-    assert(server_settings_ != NULL);
-    memcpy(&server->server_settings, server_settings_, sizeof(ezgrpc2_server_settings_t));
-    ezgrpc2_server_settings_free(server_settings_);
-  } else {
-    memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings_t));
-  }
-
-  if (http2_settings == NULL) {
-    ezgrpc2_http2_settings_t *http2_settings_= ezgrpc2_http2_settings_new(NULL);
-    memcpy(&server->http2_settings, http2_settings_, sizeof(ezgrpc2_http2_settings_t));
-    ezgrpc2_http2_settings_free(http2_settings_);
-  } else {
-    memcpy(&server->http2_settings, http2_settings, sizeof(ezgrpc2_http2_settings_t));
-  }
-
-  /* shutdown fd + ipv4 fd listener + ipv6 fd listener */
-  /**********************.
-  |     INIT SOCKET      |
-  `---------------------*/
-
-#ifdef _WIN32
-#define perror(s) fprintf(stderr, "WSA: " s " error code: %d\n", WSAGetLastError())
-#endif
-
-  if (server->ipv4_addr != NULL) {
-    memset(&ipv4_saddr, 0, sizeof(ipv4_saddr));
-    ipv4_saddr.sin_family = AF_INET;
-    ipv4_saddr.sin_addr.s_addr = inet_addr(server->ipv4_addr);
-    ipv4_saddr.sin_port = htons(server->ipv4_port);
-
-    if ((ipv4_sockfd = socket(AF_INET, SOCK_STREAM, 0)) == EZINVALID_SOCKET) {
-      perror("socket");
-      goto err;
-    }
-
-    if (setsockopt(ipv4_sockfd, SOL_SOCKET, SO_REUSEADDR, (void*)&(int){1},
-                   sizeof(int))) {
-      perror("setsockopt ipv4");
-      goto err;
-    }
-
-    if (bind(ipv4_sockfd, (struct sockaddr *)&ipv4_saddr, sizeof(ipv4_saddr)) == EZSOCKET_ERROR) {
-      perror("bind ipv4");
-      goto err;
-    }
-
-    if (listen(ipv4_sockfd, backlog) == EZSOCKET_ERROR) {
-      perror("listen ipv4");
-      goto err;
-    }
-
-    if (makenonblock(ipv4_sockfd)) assert(0);  // TODO
-
-    ezlog("listening on ipv4 %s:%d ...\n", server->ipv4_addr,
-          server->ipv4_port);
-  }
-
-  if (server->ipv6_addr != NULL) {
-    memset(&ipv6_saddr, 0, sizeof(ipv6_saddr));
-    ipv6_saddr.sin6_family = AF_INET6;
-    if (inet_pton(AF_INET6, server->ipv6_addr,
-                  ipv6_saddr.sin6_addr.s6_addr) != 1) {
-      perror("inet_pton");
-      goto err;
-    }
-    ipv6_saddr.sin6_port = htons(server->ipv6_port);
-
-    if ((ipv6_sockfd = socket(AF_INET6, SOCK_STREAM, 0)) == EZINVALID_SOCKET) {
-      perror("socket(inet6,sockstream,0)");
-      goto err;
-    }
-
-    if (setsockopt(ipv6_sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&(int){1},
-                   sizeof(int))) {
-      perror("setsockopt ipv6");
-      goto err;
-    }
-    if (setsockopt(ipv6_sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&(int){1},
-                   sizeof(int))) {
-      perror("setsockopt ipv6");
-      goto err;
-    }
-
-    if (bind(ipv6_sockfd, (struct sockaddr *)&ipv6_saddr, sizeof(ipv6_saddr)) == EZSOCKET_ERROR) {
-      perror("bind ipv6");
-      goto err;
-    }
-
-    if (listen(ipv6_sockfd, 16) == EZSOCKET_ERROR) {
-      perror("listen ipv6");
-      goto err;
-    }
-
-    if (makenonblock(ipv6_sockfd)) assert(0);  // TODO
-
-    ezlog("listening on ipv6 [%s]:%d ...\n", server->ipv6_addr,
-          server->ipv6_port);
-  }
-
-  server->nb_sessions = server->server_settings.max_connections + 2;
-  server->sessions = calloc(server->server_settings.max_connections + 2, sizeof(*server->sessions));
-
-  server->nb_fds = server->server_settings.max_connections + 2;
-  server->fds = calloc(server->nb_fds, sizeof(*(server->fds)));
-  if (server->fds == NULL)
-    goto err;
-  server->fds[0].fd = ipv4_sockfd;
-  server->fds[0].events = POLLIN | POLLRDHUP;
-  server->fds[1].fd = ipv6_sockfd;
-  server->fds[1].events = POLLIN | POLLRDHUP;
-
-  for (EZNFDS i = 2; i < server->nb_fds; i++)
-  {
-    server->fds[i].fd = -1;
-  }
-
-
-  /* start accepting connections */
-
-  return server;
-
-err:
-  ezgrpc2_server_free(server);
-  return NULL;
-}
 
 
 
@@ -724,65 +272,7 @@ err:
 
 
 
-
-
-int ezgrpc2_server_poll(
-  ezgrpc2_server_t *server,
-  ezgrpc2_list_t *levents,
-  ezgrpc2_path_t *paths,
-  size_t nb_paths,
-  int timeout) {
-  assert(levents != NULL);
-  struct pollfd *fds = server->fds;
-  const EZNFDS nb_fds = server->nb_fds;
-
-  const int ready = EZPOLL(fds, nb_fds, timeout);
-  if (ready <= 0)
-    return ready;
-
-    // add ipv4 session
-  if (fds[0].revents & POLLIN)
-    session_add(server, levents, fds[0].fd);
-  // add ipv6 session
-  if (fds[1].revents & POLLIN)
-    session_add(server, levents, fds[1].fd);
-
-  for (EZNFDS i = 2; i < nb_fds; i++) {
-    if (fds[i].fd != -1 && fds[i].revents & (POLLRDHUP | POLLERR)) {
-      ezlog("c hangup\n");
-      session_free(&server->sessions[i]);
-      fds[i].fd = -1;
-      fds[i].revents = 0;
-      //sleep(30);
-      continue;
-    }
-    if (fds[i].fd != -1 && fds[i].revents & POLLIN) {
-      server->sessions[i].nb_paths = nb_paths;
-      server->sessions[i].paths = paths;
-      server->sessions[i].levents = levents;
-      if (session_events(&server->sessions[i])) {
-        if (close(server->sessions[i].sockfd)) {
-          perror("close");
-        }
-        fds[i].fd = -1;
-        session_free(&server->sessions[i]);
-      }
-      fds[i].revents = 0;
-    }
-  }
-
-  return ready;
-}
-
-
-
-
-
-
-
-
-
-int ezgrpc2_session_send(
+EZGRPC2_API int ezgrpc2_session_send(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
@@ -827,7 +317,7 @@ int ezgrpc2_session_send(
 
 
 
-int ezgrpc2_session_end_stream(
+EZGRPC2_API int ezgrpc2_session_end_stream(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
@@ -868,7 +358,7 @@ int ezgrpc2_session_end_stream(
 
 
 
-int ezgrpc2_session_end_session(
+EZGRPC2_API int ezgrpc2_session_end_session(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 last_stream_id,
@@ -884,7 +374,7 @@ int ezgrpc2_session_end_session(
   return 0;
 }
 
-int ezgrpc2_session_find_header(
+EZGRPC2_API int ezgrpc2_session_find_header(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id, ezgrpc2_header_t *ezheader) {
@@ -906,7 +396,7 @@ int ezgrpc2_session_find_header(
 }
 
 
-const char *ezgrpc2_license(void){
+EZGRPC2_API const char *ezgrpc2_license(void){
   static const char *license = 
     "ezgrpc2 - A grpc server without the extra fancy features.\n"
     "https://github.com/mnyoshie/ezgrpc2\n"

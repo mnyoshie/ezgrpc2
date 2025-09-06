@@ -2,6 +2,7 @@
 
 CFLAGS += -I.
 CFLAGS += -fPIC
+CFLAGS += -fvisibility=hidden
 CFLAGS += $(EXTRACFLAGS)
 
 .PHONY: push test html host_html
@@ -32,7 +33,9 @@ objects += ezgrpc2_list.o
 objects += ezgrpc2_message.o
 objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
+objects += ezgrpc2_server.o
 objects += ezgrpc2_server_settings.o
+objects += ezgrpc2_session_info.o
 objects += ezgrpc2_session_uuid.o
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o

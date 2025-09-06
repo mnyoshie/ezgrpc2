@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <assert.h>
+#include "core.h"
 
 #ifdef _WIN32
 #include <Rpc.h>
@@ -9,7 +10,7 @@
 
 #include "ezgrpc2_session_uuid.h"
 
-int ezgrpc2_session_uuid_is_equal(ezgrpc2_session_uuid_t *uuid1, ezgrpc2_session_uuid_t *uuid2) {
+EZGRPC2_API int ezgrpc2_session_uuid_is_equal(ezgrpc2_session_uuid_t *uuid1, ezgrpc2_session_uuid_t *uuid2) {
   if (uuid1 == NULL || uuid2 == NULL)
     return 0;
 #ifdef _WIN32
@@ -34,7 +35,7 @@ int ezgrpc2_session_uuid_is_equal(ezgrpc2_session_uuid_t *uuid1, ezgrpc2_session
 //  return session_uuid;
 //}
 
-ezgrpc2_session_uuid_t *ezgrpc2_session_uuid_copy(ezgrpc2_session_uuid_t *session_uuid) {
+EZGRPC2_API ezgrpc2_session_uuid_t *ezgrpc2_session_uuid_copy(ezgrpc2_session_uuid_t *session_uuid) {
 #ifdef _WIN32
   ezgrpc2_session_uuid_t *ret = malloc(sizeof(UUID));
   memcpy(ret, session_uuid, sizeof(UUID));
@@ -45,6 +46,6 @@ ezgrpc2_session_uuid_t *ezgrpc2_session_uuid_copy(ezgrpc2_session_uuid_t *sessio
   return ret;
 }
 
-void ezgrpc2_session_uuid_free(ezgrpc2_session_uuid_t *session_uuid) {
+EZGRPC2_API void ezgrpc2_session_uuid_free(ezgrpc2_session_uuid_t *session_uuid) {
   free(session_uuid);
 }

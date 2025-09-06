@@ -59,7 +59,7 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list_t *lmessag
 /* ----------- BEGIN NGHTTP2 CALLBACKS ------------------*/
 
 
-__attribute__((visibility("hidden"))) nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
+nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
                                          i32 stream_id, u8 *buf, size_t buf_len,
                                          u32 *data_flags,
                                          nghttp2_data_source *source,
@@ -473,7 +473,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     /* In scenarios where the Request stream needs to be closed but no data remains
      * to be sent implementations MUST send an empty DATA frame with this flag set. */
 //    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-//    ezgrpc2_event_t *event = ezgrpc2_event_new(
+//    ezgrpc2_event_t *event = event_new(
 //      EZGRPC2_EVENT_MESSAGE,
 //      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
 //      ((ezgrpc2_event_message_t) {
@@ -493,7 +493,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
     memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
     ezstream->recv_len -= lseek;
-    ezgrpc2_event_t *event = ezgrpc2_event_new(
+    ezgrpc2_event_t *event = event_new(
       EZGRPC2_EVENT_MESSAGE,
       ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
       ((ezgrpc2_event_message_t) {
@@ -502,21 +502,21 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
         .stream_id = frame->hd.stream_id,
       })
     );
-    event->path_index = ezstream->path_index;
+    event->message.path_index = ezstream->path_index;
 
     ezgrpc2_list_push_back(ezsession->levents, event);
   }
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
     /* we've receaived an end stream but last message is truncated */
     atlog("event dataloss %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event_t *event = ezgrpc2_event_new(
+    ezgrpc2_event_t *event = event_new(
       EZGRPC2_EVENT_DATALOSS,
       ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
       ((ezgrpc2_event_dataloss_t) {
         .stream_id = ezstream->stream_id,
       })
     );
-    event->path_index = ezstream->path_index;
+    event->dataloss.path_index = ezstream->path_index;
   
     ezgrpc2_list_push_back(ezsession->levents, event);
     //event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
@@ -617,7 +617,7 @@ static int on_stream_close_callback(nghttp2_session *session, i32 stream_id,
 
 /* ----------- END NGHTTP2 CALLBACKS ------------------*/
 
-void __attribute__((visibility("hidden"))) server_setup_ngcallbacks(nghttp2_session_callbacks *ngcallbacks) {
+void server_setup_ngcallbacks(nghttp2_session_callbacks *ngcallbacks) {
   /* clang-format off */
   nghttp2_session_callbacks_set_send_callback(ngcallbacks, ngsend_callback);
   nghttp2_session_callbacks_set_recv_callback(ngcallbacks, ngrecv_callback);

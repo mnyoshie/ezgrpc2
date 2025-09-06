@@ -26,10 +26,6 @@ struct ezgrpc2_event_t {
   ezgrpc2_session_uuid_t *session_uuid;
   ezgrpc2_event_type_t type;
 
-  /* when type is EVENT_CONNECT or EVENT_DISCONNECT, ignore
-   * path_index and the rest in the anonymous union.
-   */
-  size_t path_index;
   union {
     ezgrpc2_event_message_t message;
     ezgrpc2_event_dataloss_t dataloss;
@@ -121,9 +117,9 @@ Sending a message:
 ezgrpc2_session_send(server, event->session_uuid, event->message.stream_id, lmessages);
 ```
 
-Ending stream:
+Ending a stream:
 ```c
-ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_STATUS_OK);
+ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
 ```
 
 when you're done using tbe server:
@@ -140,7 +136,8 @@ The EZgRPC2 server library have no such concept of streaming or unary
 services and that all it knows is to accept messages if it exists in
 the `path` we're polling using `ezgrpc2_server_poll()`. But, you can
 enforce that a service is unary by ending the stream immediately with the status
-`EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT` if you received more than one messages.
+`EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT` if you received more than one messages
+in a stream.
 
 Even though the HTTP2 standard permits closing a stream with an empty DATA
 frame, this is illegal in EZgRPC2, because if a service is unary, it might

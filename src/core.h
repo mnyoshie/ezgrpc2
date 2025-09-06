@@ -1,6 +1,8 @@
 #ifndef EZGRPC2_CORE_H
 #define EZGRPC2_CORE_H
 #include <string.h>
+#include <assert.h>
+#include <unistd.h>
 #include <nghttp2/nghttp2.h>
 
 #ifdef _WIN32
@@ -53,14 +55,18 @@ static char *strndup(char *c, size_t n) {
 
 #include "ansicolors.h"
 #include "common.h"
+#include "ezgrpc2.h"
 #include "ezgrpc2_path.h"
-#include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_server_settings.h"
 #include "ezgrpc2_server_settings_struct.h"
+#include "ezgrpc2_session_info.h"
+#include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_message.h"
 #include "ezgrpc2_http2_settings.h"
 #include "ezgrpc2_http2_settings_struct.h"
 #include "ezgrpc2_header.h"
+
+#define EZGRPC2_API __attribute__((visibility("default")))
 
 
 /* stores the values of a SETTINGS frame */
@@ -150,7 +156,6 @@ struct ezgrpc2_session_t {
 
 };
 
-/* This struct is private. Please use the auxilliary functions below it */
 struct ezgrpc2_server_t {
   nghttp2_session *ngsession;
   ezgrpc2_server_settings_t server_settings;
