@@ -1,10 +1,11 @@
 #include <stdio.h>
+#include "core.h"
 #include "ezgrpc2_global.h"
 #ifdef _WIN32
 #include <Winsock2.h>
 #endif
 
-int ezgrpc2_global_init(uint64_t unused) {
+EZGRPC2_API int ezgrpc2_global_init(uint64_t unused) {
   (void)unused;
 #ifdef _WIN32
   int ret;
@@ -16,7 +17,7 @@ int ezgrpc2_global_init(uint64_t unused) {
 #endif
   return 0;
 }
-void ezgrpc2_global_cleanup() {
+EZGRPC2_API void ezgrpc2_global_cleanup() {
 #ifdef _WIN32
   WSACleanup();
 #endif

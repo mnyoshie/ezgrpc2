@@ -13,3 +13,4 @@ ifeq ($(ENABLE_ASAN),1)
   LDFLAGS += -fsanitize=address
   CFLAGS += -fsanitize=address
 endif
+

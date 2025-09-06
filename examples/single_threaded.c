@@ -114,20 +114,20 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezg
   while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     switch (event->type) {
     case EZGRPC2_EVENT_MESSAGE:
-      handle_event_message(event, paths[event->path_index].userdata, server);
+      handle_event_message(event, paths[event->message.path_index].userdata, server);
       break;
     case EZGRPC2_EVENT_DATALOSS:
-      handle_event_dataloss(event, paths[event->path_index].userdata, server);
+      handle_event_dataloss(event, paths[event->dataloss.path_index].userdata, server);
       break;
     case EZGRPC2_EVENT_CANCEL:
       printf("event cancel on stread %d\n\n", event->cancel.stream_id);
       // FIXME: HANDLE ME
       break;
     case EZGRPC2_EVENT_CONNECT:
-      printf("event connect");
+      printf("event connect\n");
       break;
     case EZGRPC2_EVENT_DISCONNECT:
-      printf("event disconnect");
+      printf("event disconnect\n");
       break;
     } /* switch */
     ezgrpc2_event_free(event);
@@ -287,6 +287,7 @@ int main() {
   }
 
 
+  ezgrpc2_list_free(levents);
   ezgrpc2_server_free(server);
   /* we aee aure these are enpty because we did not poll at break */
   ezgrpc2_global_cleanup();

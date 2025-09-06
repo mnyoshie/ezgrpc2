@@ -198,10 +198,10 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezg
       // FIXME: HANDLE ME
       break;
     case EZGRPC2_EVENT_CONNECT:
-      printf("event connect");
+      printf("event connect\n");
       break;
     case EZGRPC2_EVENT_DISCONNECT:
-      printf("event disconnect");
+      printf("event disconnect\n");
       break;
     
     } /* switch */
@@ -430,6 +430,7 @@ int main() {
   }
 
 
+  ezgrpc2_list_free(levents);
   ezgrpc2_server_free(server);
   /* we aee aure these are enpty because we did not poll at break */
   ezgrpc2_pthpool_free(ordered_pool);

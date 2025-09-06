@@ -61,10 +61,8 @@ static char *strndup(char *c, size_t n) {
 #include "ezgrpc2_server_settings_struct.h"
 #include "ezgrpc2_session_info.h"
 #include "ezgrpc2_session_uuid.h"
-#include "ezgrpc2_message.h"
 #include "ezgrpc2_http2_settings.h"
 #include "ezgrpc2_http2_settings_struct.h"
-#include "ezgrpc2_header.h"
 
 #define EZGRPC2_API __attribute__((visibility("default")))
 
