@@ -37,25 +37,37 @@ struct path_userdata_t {
   void *(*callback)(void*);
 };
 
-
-struct userdata_t *create_userdata(ezgrpc2_session_uuid_t *session_uuid, int32_t stream_id,
-    ezgrpc2_list_t *lmessages, char end_stream, ezgrpc2_grpc_status_t status) {
-  struct userdata_t *data = malloc(sizeof(*data));
-  data->session_uuid = ezgrpc2_session_uuid_copy(session_uuid);
-  data->stream_id = stream_id;
-  data->limessages = lmessages;
-  data->end_stream = end_stream;
-  data->status = status;
-  return data;
-}
-
+/* pops all the messages and frees the list */
 void free_lmessages(ezgrpc2_list_t *lmessages){
+  if (lmessages == NULL)
+    return;
   ezgrpc2_message_t *msg;
   while ((msg = ezgrpc2_list_pop_front(lmessages)) != NULL) {
     ezgrpc2_message_free(msg);
   }
   ezgrpc2_list_free(lmessages);
 }
+
+
+struct userdata_t *create_userdata(ezgrpc2_session_uuid_t *session_uuid, int32_t stream_id,
+    ezgrpc2_list_t *lmessages, char end_stream, ezgrpc2_grpc_status_t status) {
+  struct userdata_t *data = malloc(sizeof(*data));
+  data->session_uuid = session_uuid;
+  data->stream_id = stream_id;
+  data->limessages = lmessages;
+  data->lomessages = NULL;
+  data->end_stream = end_stream;
+  data->status = status;
+  return data;
+}
+
+void free_userdata(struct userdata_t *userdata) {
+  ezgrpc2_session_uuid_free(userdata->session_uuid);
+  free_lmessages(userdata->limessages);
+  free_lmessages(userdata->lomessages);
+  free(userdata);
+}
+
 
 _Atomic int pp = 0;
 /* No ezgrpc2_* functions must be called in this callback */
@@ -75,10 +87,6 @@ void *callback_path0(void *data){
     *(uint32_t*)(msg->data) = pp;
     ezgrpc2_list_push_back(userdata->lomessages, msg);
   }
-
-  /* cleanup (input messages) */
-  free_lmessages(userdata->limessages);
-  userdata->limessages = NULL;
 
   return data;
 }
@@ -131,8 +139,10 @@ static void handle_event_message(ezgrpc2_event_t *event,
   struct userdata_t *data = create_userdata(
       event->session_uuid, event->message.stream_id, event->message.lmessages,
       event->message.end_stream, 0 /* status ok */);
-  /* we've taken ownership of this. clear */
+  /* we've taken ownership of this addresses. set to NULL to prevent ezgrpc2_event_free
+   * from freeing it. */
    event->message.lmessages = NULL;
+   event->session_uuid = NULL;
 
   /* if path/service is unary, add task to upool, else add to opool */
   if (path_userdata->is_unary)
@@ -170,6 +180,9 @@ static void handle_event_dataloss(ezgrpc2_event_t *event,
   struct userdata_t *data = create_userdata(event->session_uuid, event->dataloss.stream_id,
                          ezgrpc2_list_new(NULL), 1,
                          EZGRPC2_GRPC_STATUS_DATA_LOSS);
+  /* weve taken ownershio of this address. clear */
+   event->session_uuid = NULL;
+
 
   if (path_userdata->is_unary)
     ezgrpc2_pthpool_add_task(upool, path_userdata->callback, data, NULL,
@@ -217,41 +230,34 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
  while ((result = ezgrpc2_list_pop_front(lresults)) != NULL) {
    struct userdata_t *data = result->ret;
    if (result->is_timeout) {
-     free_lmessages(data->limessages);
-     free(result->userdata);
+     free_userdata(result->userdata);
      /* when task has timeout, it is not executed so
-      * task->ret is always NULL */
+      * result->ret is always NULL */
      ezgrpc2_pthpool_result_free(result);
      continue;
    }
-   /* ezgrpc2_session_send() will take ownership of list of messages if it succeeds,
-    * otherwise you will have to manually free it.
+   /* ezgrpc2_session_send() will empty data->lomessages if it succeeds.
     */
    switch (ezgrpc2_session_send(server, data->session_uuid, data->stream_id, data->lomessages)){
      case 0:
       /* ok */
-       free_lmessages(data->lomessages);
        if (data->end_stream)
          ezgrpc2_session_end_stream(server, data->session_uuid, data->stream_id, data->status);
        break;
      case 1:
-       /* possibly the client closed the connection */
-       /* free */
-       free_lmessages(data->lomessages);
        break;
      case 2:
        /* possibly the client sent a rst stream */
        printf("stream id doesn't exists %d\n", data->stream_id);
        /* free */
-       free_lmessages(data->lomessages);
        break;
      default:
        assert(0);
    } /* switch */
    ezgrpc2_pthpool_result_free(result);
-   ezgrpc2_session_uuid_free(data->session_uuid);
-   free(data);
+   free_userdata(data);
   } /* while() */
+  ezgrpc2_list_free(lresults);
 }
 
 
@@ -283,11 +289,13 @@ static void *signal_handler(void *data) {
 #endif
 
 int main() {
-  (void)ezgrpc2_global_init(0);
   int res;
   const size_t nb_paths = 2;
   ezgrpc2_path_t paths[nb_paths];
   struct path_userdata_t path_userdata[nb_paths];
+  res = ezgrpc2_global_init(0);
+  if (res) 
+    abort();
 
 
 #ifdef __unix__
@@ -430,9 +438,9 @@ int main() {
   }
 
 
+  /* we are sure these are empty because we break the while loop before polling */
   ezgrpc2_list_free(levents);
   ezgrpc2_server_free(server);
-  /* we aee aure these are enpty because we did not poll at break */
   ezgrpc2_pthpool_free(ordered_pool);
   ezgrpc2_pthpool_free(unordered_pool);
 

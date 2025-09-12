@@ -81,7 +81,6 @@ struct ezgrpc2_event_t {
 };
 
 //#define event_new(a, b, c) event_new(a, b, c)
-ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...);
 void ezgrpc2_event_free(ezgrpc2_event_t *event);
 
 #endif

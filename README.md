@@ -103,18 +103,32 @@ if (res > 0) {
   }
 }
 ```
+Question: What is actually `session_uuid`? For simplicity, assume it's
+an address pointing to a 16 bytes universally unique identifier, but
+this may vary between other systems so it's represented as an opaque type.
+
+Note: `ezgrpc2_event_free()` invalidates the address at
+`event->session_uuid` and all other members.  If you want to make
+use of `event->session_uuid`, set it to `NULL` after you've stored
+its address somewhere else, OR you may make a copy of it using
+`ezgrpc2_session_uuid_copy()`. The lifetime of this copy exists as long
+as the program is running. Of course, you would also have manually free
+this copy using `ezgrpc2_session_uuid_free()`.
 
 Creating a message:
 ```c
 ezgrpc2_message_t *message = ezgrpc2_message_new(11);
+message->is_compressed = 0;
 memcpy(message->data, "Hello mom!", 11);
+
 ezgrpc2_list_t *lmessages = ezgrpc2_list_new(NULL);
-ezgrpc2_list_push_back(list, message);
+ezgrpc2_list_push_back(lmessages, message);
 ```
 
 Sending a message:
 ```c
 ezgrpc2_session_send(server, event->session_uuid, event->message.stream_id, lmessages);
+ezgrpc2_list_free(lmessages);
 ```
 
 Ending a stream:
@@ -122,7 +136,7 @@ Ending a stream:
 ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
 ```
 
-when you're done using tbe server:
+when you're done using the server:
 ```c
 ezgrpc2_server_free(server);
 ```

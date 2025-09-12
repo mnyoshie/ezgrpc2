@@ -8,11 +8,6 @@
 #include <unistd.h>
 #include <assert.h>
 
-#ifdef __unix__
-#include <signal.h>
-#include <pthread.h>
-#endif
-
 #include "ezgrpc2.h"
 
 struct path_userdata_t {
@@ -138,68 +133,12 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezg
 ///////////////////////////////////////////////////////////
 
 
-
-
-#ifdef __unix__
-_Atomic int sigterm_flag = 0;
-static void *signal_handler(void *data) {
-  sigset_t *sigset = data;
-  int sig, res;
-  while (1) {
-    res = sigwait(sigset, &sig);
-    if (res > 1) {
-      fprintf(stderr, "sigwait error\n");
-      abort();
-    }
-    if (sig & SIGTERM) {
-      sigterm_flag = 1;
-      write(0, "sigterm_flag set. waiting for next poll timeout\n", 48);
-    }
-  }
-}
-
-#endif
 int main() {
   (void)ezgrpc2_global_init(0);
   int res;
   const size_t nb_paths = 2;
   ezgrpc2_path_t paths[nb_paths];
   struct path_userdata_t path_userdata[nb_paths];
-
-
-#ifdef __unix__
-  /* In a real application, user must configure the server
-   * to handle SIGTERM, and make sure to prevent these
-   * signal from propagating through the main threads and
-   * pool threads via pthread_sigmask()
-   */
-  sigset_t sigset;
-  sigemptyset(&sigset);
-  sigaddset(&sigset, SIGTERM);
-  sigaddset(&sigset, SIGPIPE);
-  res = pthread_sigmask (SIG_BLOCK, &sigset, NULL);
-  if (res != 0) {
-    fprintf(stderr, "pthread_sigmask failed\n");
-    abort();
-  }
-
-  /* run our signal handler */
-  pthread_t sig_thread;
-  res = pthread_create(&sig_thread, NULL, signal_handler, &sigset);
-  if (res) {
-    fprintf(stderr, "pthread_create failed\n");
-    abort();
-  }
-
-  /* make sure the signals won't propagate through the
-   * main thread and worker threads
-   */
-  res = pthread_sigmask(SIG_SETMASK, &sigset, NULL);
-  if (res != 0) {
-    fprintf(stderr, "pthread_sigmask failed\n");
-    abort();
-  }
-#endif /* __unix__ */
 
 
   /* The heart of this API */
@@ -254,14 +193,6 @@ int main() {
 
   ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
   while (1) {
-#ifdef __unix__
-    // if sigterm flag has been set by the signal handler, break the loop and kill
-    // server.
-    if (sigterm_flag) {
-      break;
-    }
-
-#endif
     /* if thread pool is empty, maybe we can give our resources to the cpu
      * and wait a little longer.
      */
@@ -287,9 +218,9 @@ int main() {
   }
 
 
+  /* we are sure these are empty because we break the while loop before polling */
   ezgrpc2_list_free(levents);
   ezgrpc2_server_free(server);
-  /* we aee aure these are enpty because we did not poll at break */
   ezgrpc2_global_cleanup();
 
   return res;

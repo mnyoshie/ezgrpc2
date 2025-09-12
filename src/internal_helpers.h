@@ -9,7 +9,6 @@ int makenonblock(SOCKET sockfd);
 int makenonblock(int sockfd);
 #endif
 
-ezgrpc2_session_info_t *session_info_new(void *);
 int session_add(ezgrpc2_server_t *ezserver, ezgrpc2_list_t *levents, int listenfd);
 int session_events(ezgrpc2_session_t *ezsession);
 void session_free(ezgrpc2_session_t *ezsession);

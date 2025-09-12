@@ -7,6 +7,7 @@
 #define ezlog(...) (void)0
 
 
+extern ezgrpc2_session_info_t *session_info_new(void *);
 
 EZGRPC2_API ezgrpc2_list_t *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server_t *server) {
   ezgrpc2_list_t *lsession_info = ezgrpc2_list_new(NULL);

@@ -6,6 +6,8 @@
 #define atlog(...) (void)0
 #define ezlog(...) (void)0
 
+extern ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...);
+
 #ifdef _WIN32
 int makenonblock(SOCKET sockfd) {
   return ioctlsocket(sockfd, FIONBIO, &(u_long){1});

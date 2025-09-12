@@ -12,6 +12,8 @@
 
 #define atlog(...) (void)0
 
+extern ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...);
+
 static int list_cmp_ezstream_id(const void *data,const void *userdata) {
   return ((ezgrpc2_stream_t*)data)->stream_id != *(i32*)userdata;
 }
