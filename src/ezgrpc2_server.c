@@ -238,6 +238,7 @@ EZGRPC2_API int ezgrpc2_server_poll(
       server->sessions[i].nb_paths = nb_paths;
       server->sessions[i].paths = paths;
       server->sessions[i].levents = levents;
+      server->sessions[i].server_settings = &server->server_settings;
       if (session_events(&server->sessions[i])) {
         if (close(server->sessions[i].sockfd)) {
           perror("close");
@@ -276,4 +277,15 @@ EZGRPC2_API void ezgrpc2_server_free(
   free(ezserver->ipv6_addr);
   free(ezserver->sessions);
   free(ezserver);
+}
+
+void ezgrpc2_server_log(ezgrpc2_server_t *server, uint32_t log_level, char *fmt, ...){
+  if (!(log_level & server->server_settings.logging_level))
+    return;
+  va_list args;
+  va_start(args, fmt);
+  char dt[128] = {0};
+  fprintf(server->server_settings.logging_fp, "[%s] ", ezgetdt(dt, sizeof(dt)));
+  vfprintf(server->server_settings.logging_fp, fmt, args);
+  va_end(args);
 }

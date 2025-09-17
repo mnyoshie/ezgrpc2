@@ -1,10 +1,11 @@
 #include <assert.h>
+#include <time.h>
 #include "core.h"
 #include "ezgrpc2_header.h"
 #include "internal_nghttp2_callbacks.h"
 #include "internal_helpers.h"
 #define atlog(...) (void)0
-#define ezlog(...) (void)0
+//#define ezlog(...) (void)0
 
 extern ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...);
 
@@ -30,9 +31,113 @@ int list_cmp_ezheader_name(const void *data, const void *userdata) {
 }
 
 
+static void dump_decode_binary(i8 *data, size_t len) {
+  i8 look_up[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+  for (size_t i = 0; i < len; i++) {
+    putchar(look_up[(data[i] >> 4) & 0x0f]);
+    putchar(look_up[data[i] & 0x0f]);
+    putchar(' ');
+    if (i == 7) putchar(' ');
+  }
+}
+
+static void dump_decode_ascii(i8 *data, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (data[i] < 0x20) {
+      putchar('.');
+    } else if (data[i] < 0x7f)
+      putchar(data[i]);
+    else
+      putchar('.');
+  }
+}
+
+void ezdump(void *vdata, size_t len) {
+  i8 *data = vdata;
+  if (len == 0) return;
+
+  size_t cur = 0;
+
+  for (; cur < 16 * (len / 16); cur += 16) {
+    dump_decode_binary(data + cur, 16);
+    printf("| ");
+    dump_decode_ascii(data + cur, 16);
+    printf(" |");
+    puts("");
+  }
+  /* write the remaining */
+  if (len % 16) {
+    dump_decode_binary(data + cur, len % 16);
+    /* write the empty */
+    for (size_t i = 0; i < 16 - (len % 16); i++) {
+      printf("   ");
+      if (i == 7 && (7 < 16 - (len % 16))) putchar(' ');
+    }
+    printf("| ");
+    dump_decode_ascii(data + cur, len % 16);
+    for (size_t i = 0; i < 16 - (len % 16); i++) {
+      putchar(' ');
+    }
+    printf(" |");
+    puts("");
+    cur += len % 16;
+  }
+  assert(len == cur);
+}
+
+char *ezgetdt(char *buf, size_t len) {
+#ifdef __unix__
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  char tmp[32] = {0};
+  strftime(tmp, sizeof(tmp), "%F %T", localtime(&ts.tv_sec));
+  snprintf(buf, len, COLSTR("%s.%09ld", BGRN), tmp, ts.tv_nsec);
+#else
+  time_t t = time(NULL);
+  struct tm stm = *localtime(&t);
+  snprintf(buf, len, COLSTR("%d/%02d/%02d %02d:%02d:%02d", BGRN),
+           stm.tm_year + 1900, stm.tm_mon + 1, stm.tm_mday, stm.tm_hour,
+           stm.tm_min, stm.tm_sec);
+#endif
+  return buf;
+}
 
 
 
+
+
+
+//void ezlogf(ezgrpc2_session_t *ezsession, i8 *file, int line, i8 *fmt,
+//                   ...) {
+//  fprintf(logging_fp, "[%s @ %s:%d] " COLSTR("%s%s%s:%d", BHBLU) " ", ezgetdt(),
+//          file, line, (ezsession->sockaddr.ss_family == AF_INET6 ? "[" : ""),
+//          ezsession->client_addr, (ezsession->sockaddr.ss_family == AF_INET6 ? "]" : ""),
+//          ezsession->client_port);
+//
+//  va_list args;
+//  va_start(args, fmt);
+//  vfprintf(logging_fp, fmt, args);
+//  va_end(args);
+//}
+
+void ezlog(char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  char dt[128] = {0};
+  fprintf(stderr, "[%s] ", ezgetdt(dt, sizeof(dt)));
+  vfprintf(stderr, fmt, args);
+  va_end(args);
+}
+
+void ezflog(FILE *fp, char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  char dt[128] = {0};
+  fprintf(fp, "[%s] ", ezgetdt(dt, sizeof(dt)));
+  vfprintf(fp, fmt, args);
+  va_end(args);
+}
 
 EZNFDS get_unused_pollfd_ndx(struct pollfd *fds, EZNFDS nb_fds) {
   for (EZNFDS i = 2; i < nb_fds; i++)

@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include "core.h"
 #include "ezgrpc2_server_settings.h"
 #include "ezgrpc2_server_settings_struct.h"
 
@@ -27,18 +28,28 @@ static ssize_t read_cb(void *const sock, void *buf, size_t len, int flags) {
 }
 
 static ezgrpc2_server_settings_t default_server_settings = {
-  .max_connections = 1024
+  .max_connections = 1024,
+  .logging_level = 0,
 };
 
-ezgrpc2_server_settings_t *ezgrpc2_server_settings_new(void *unused) {
+EZGRPC2_API ezgrpc2_server_settings_t *ezgrpc2_server_settings_new(void *unused) {
   (void)unused;
   ezgrpc2_server_settings_t *server_settings = malloc(sizeof(*server_settings));
   memcpy(server_settings, &default_server_settings, sizeof(ezgrpc2_server_settings_t));
+  server_settings->logging_fp = stderr;
   return server_settings;
 }
 
-void ezgrpc2_server_settings_set_max_connections(ezgrpc2_server_settings_t *server_settings, size_t max_connections) {
+EZGRPC2_API void ezgrpc2_server_settings_set_max_connections(ezgrpc2_server_settings_t *server_settings, size_t max_connections) {
   server_settings->max_connections = max_connections;
+}
+
+EZGRPC2_API void ezgrpc2_server_settings_set_logging_fp(ezgrpc2_server_settings_t *server_settings, FILE *fp) {
+  server_settings->logging_fp = fp;
+}
+
+EZGRPC2_API void ezgrpc2_server_settings_set_logging_level(ezgrpc2_server_settings_t *server_settings, uint32_t logging_level) {
+  server_settings->logging_level = logging_level;
 }
 //void ezgrpc2_server_settings_set_write_callback(ezgrpc2_server_settings_t *server_settings,
 //    ssize_t (*write)(void *sock, void *buf, size_t len, int flags)
@@ -52,6 +63,6 @@ void ezgrpc2_server_settings_set_max_connections(ezgrpc2_server_settings_t *serv
 //  server_settings->read_cb = read;
 //}
 
-void ezgrpc2_server_settings_free(ezgrpc2_server_settings_t *server_settings) {
+EZGRPC2_API void ezgrpc2_server_settings_free(ezgrpc2_server_settings_t *server_settings) {
   free(server_settings);
 }

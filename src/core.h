@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <nghttp2/nghttp2.h>
 
 #ifdef _WIN32
@@ -68,14 +69,14 @@ static char *strndup(char *c, size_t n) {
 
 
 /* stores the values of a SETTINGS frame */
-typedef struct ezgrpc_settingsf_t ezgrpc_settingsf_t;
-struct ezgrpc_settingsf_t {
-  u32 header_table_size;
-  u32 enable_push;
-  u32 max_concurrent_streams;
-  u32 flow_control;
-  u32 max_frame_size;
-};
+//typedef struct ezgrpc_settingsf_t ezgrpc_settingsf_t;
+//struct ezgrpc_settingsf_t {
+//  u32 header_table_size;
+//  u32 enable_push;
+//  u32 max_concurrent_streams;
+//  u32 flow_control;
+//  u32 max_frame_size;
+//};
 
 
 typedef struct ezgrpc2_stream_t ezgrpc2_stream_t;
@@ -87,14 +88,14 @@ struct ezgrpc2_stream_t {
   u64 time;
   ezgrpc2_list_t *lheaders;
 
-  i8 is_method_post : 1;
-  i8 is_scheme_http : 1;
+  bool is_method_post : 1;
+  bool is_scheme_http : 1;
   /* just a bool. if `te` is a trailer, or `te` does exists. */
-  i8 is_te_trailers : 1;
+  bool is_te_trailers : 1;
   /* just a bool. if content type is application/grpc* */
-  i8 is_content_grpc : 1;
+  bool is_content_grpc : 1;
 
-  i8 is_trunc : 1;
+  bool is_trunc : 1;
 
   /* stores `:path` */
   ezgrpc2_path_t *path;
@@ -120,6 +121,7 @@ struct ezgrpc2_session_t {
   int sockfd;
   socklen_t socklen;
 #endif
+  ezgrpc2_server_settings_t *server_settings;
 
 
   struct sockaddr_storage sockaddr;
@@ -180,4 +182,5 @@ struct ezgrpc2_server_t {
   size_t nb_sessions;
   ezgrpc2_session_t *sessions;
 };
+
 #endif

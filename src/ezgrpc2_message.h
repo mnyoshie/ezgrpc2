@@ -13,5 +13,6 @@ struct ezgrpc2_message_t {
 };
 
 ezgrpc2_message_t *ezgrpc2_message_new(size_t data_len);
+ezgrpc2_message_t *ezgrpc2_message_new2(void *data, size_t data_len);
 void ezgrpc2_message_free(ezgrpc2_message_t *message);
 #endif

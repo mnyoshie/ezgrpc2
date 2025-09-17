@@ -531,6 +531,35 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
 
 
 
+static int on_frame_send_callback(nghttp2_session *session,
+                                  const nghttp2_frame *frame, void *user_data) {
+#ifdef EZENABLE_DEBUG
+  atlog("frame type: %d, stream id %d\n", frame->hd.type, frame->hd.stream_id);
+#endif
+  ezgrpc2_session_t *ezsession = user_data;
+  switch (frame->hd.type) {
+    case NGHTTP2_SETTINGS:
+      ezflog(ezsession->server_settings->logging_fp, "> FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
+      return 0;
+    case NGHTTP2_HEADERS:
+      ezflog(ezsession->server_settings->logging_fp, "> FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
+      return 0;
+    case NGHTTP2_DATA:
+      ezflog(ezsession->server_settings->logging_fp, "> FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      return 0;
+    case NGHTTP2_WINDOW_UPDATE:
+      // printf("frame window update %d\n",
+      // frame->window_update.window_size_increment); int res;
+      //    if ((res = nghttp2_session_set_local_window_size(session,
+      //    NGHTTP2_FLAG_NONE, frame->hd.stream_id,
+      //    frame->window_update.window_size_increment)) != 0)
+      //      assert(0);
+      break;
+    default:
+      break;
+  }
+  return 0;
+}
 
 
 
@@ -546,10 +575,13 @@ static int on_frame_recv_callback(nghttp2_session *session,
   ezgrpc2_session_t *ezsession = user_data;
   switch (frame->hd.type) {
     case NGHTTP2_SETTINGS:
+      ezflog(ezsession->server_settings->logging_fp, "< FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
       return on_frame_recv_settings(ezsession, frame);
     case NGHTTP2_HEADERS:
+      ezflog(ezsession->server_settings->logging_fp, "< FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
       return on_frame_recv_headers(ezsession, frame);
     case NGHTTP2_DATA:
+      ezflog(ezsession->server_settings->logging_fp, "< FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return on_frame_recv_data(ezsession, frame);
     case NGHTTP2_WINDOW_UPDATE:
       // printf("frame window update %d\n",
@@ -630,10 +662,8 @@ void server_setup_ngcallbacks(nghttp2_session_callbacks *ngcallbacks) {
   nghttp2_session_callbacks_set_on_header_callback(ngcallbacks, on_header_callback);
   /* we received a frame. do something about it */
   nghttp2_session_callbacks_set_on_frame_recv_callback(ngcallbacks, on_frame_recv_callback);
-//  nghttp2_session_callbacks_set_on_frame_send_callback(ngcallbacks, on_frame_send_callback);
+  nghttp2_session_callbacks_set_on_frame_send_callback(ngcallbacks, on_frame_send_callback);
 
-  //  nghttp2_session_callbacks_set_on_frame_send_callback(callbacks,
-  //                                                       on_frame_send_callback);
   nghttp2_session_callbacks_set_on_data_chunk_recv_callback(ngcallbacks, on_data_chunk_recv_callback);
   nghttp2_session_callbacks_set_on_stream_close_callback(ngcallbacks, on_stream_close_callback);
  // nghttp2_session_callbacks_set_send_data_callback(ngcallbacks, send_data_callback);

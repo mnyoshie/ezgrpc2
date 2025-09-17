@@ -24,6 +24,9 @@ void stream_free(ezgrpc2_stream_t *stream);
 ezgrpc2_stream_t *stream_new(i32 stream_id);
 
 int list_cmp_ezheader_name(const void *data, const void *userdata);
+void ezlog(char *fmt, ...);
+void ezflog(FILE *fp, char *fmt, ...);
+char *ezgetdt(char *buf, size_t len);
 
 
 EZNFDS get_unused_pollfd_ndx(struct pollfd *fds, EZNFDS nb_fds);

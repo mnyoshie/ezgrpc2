@@ -75,7 +75,7 @@ Polling for events:
 ```c
 ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
 int timeout = 10000;
-int res = ezgrpc2_server_poll(server, levents, nb_paths, timeout);
+int res = ezgrpc2_server_poll(server, levents, paths, nb_paths, timeout);
 ```
 
 Handle events:
