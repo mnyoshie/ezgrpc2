@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include "thpool.h"
 #include <nghttp2/nghttp2.h>
 
 #ifdef _WIN32
@@ -56,7 +57,7 @@ static char *strndup(char *c, size_t n) {
 
 #include "ansicolors.h"
 #include "common.h"
-#include "ezgrpc2.h"
+#include "ezgrpc2_session.h"
 #include "ezgrpc2_path.h"
 #include "ezgrpc2_server_settings.h"
 #include "ezgrpc2_server_settings_struct.h"
@@ -121,12 +122,11 @@ struct ezgrpc2_session_t {
   int sockfd;
   socklen_t socklen;
 #endif
-  ezgrpc2_server_settings_t *server_settings;
+  /* parent server context */
+  ezgrpc2_server_t *server;
 
 
   struct sockaddr_storage sockaddr;
-  ezgrpc2_list_t *levents;
-
 
   /* an ASCII string */
   char client_addr[64];
@@ -142,24 +142,22 @@ struct ezgrpc2_session_t {
   /* settings requested by the client. to be set when a SETTINGS
    * frame is received.
    */
- // ezgrpc_settingsf_t csettings;
-
-  /* A pointer to the settings in ezgrpc2_server_t.settings
-   */
-  ezgrpc2_http2_settings_t server_http2_settings;
   ezgrpc2_http2_settings_t client_http2_settings;
 
   //size_t nb_open_streams;
   /* the streams in a linked lists. allocated when we are
    * about to receive a HEADERS frame */
   ezgrpc2_list_t *lstreams;
-
+  size_t nb_streams;
 };
 
 struct ezgrpc2_server_t {
   nghttp2_session *ngsession;
   ezgrpc2_server_settings_t server_settings;
   ezgrpc2_http2_settings_t http2_settings;
+  thpool_t *logger_thread;
+  ezgrpc2_list_t *levents;
+
   u16 ipv4_port;
   u16 ipv6_port;
 

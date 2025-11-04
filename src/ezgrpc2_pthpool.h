@@ -2,8 +2,8 @@
  * pthpool.h - A C library for pollable thread pools
  * */
 
-#ifndef EZGRPC2_THPOOL_H
-#define EZGRPC2_THPOOL_H
+#ifndef EZGRPC2_PTHPOOL_H
+#define EZGRPC2_PTHPOOL_H
 #include <time.h>
 #include "ezgrpc2_list.h"
 

@@ -348,8 +348,14 @@ int main() {
   ordered_pool = ezgrpc2_pthpool_new(1, 0);
   assert(ordered_pool != NULL);
 
+  /* setup server settings */
+  ezgrpc2_server_settings_t *server_settings = ezgrpc2_server_settings_new(NULL);
+  assert(server_settings != NULL);
+  ezgrpc2_server_settings_set_logging_level(server_settings, EZGRPC2_SERVER_LOG_DEBUG);
+
   /* The heart of this API */
-  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL, NULL);
+  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, server_settings, NULL);
+  ezgrpc2_server_settings_free(server_settings);
   assert(server != NULL);
 
 

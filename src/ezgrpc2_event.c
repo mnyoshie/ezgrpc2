@@ -1,6 +1,6 @@
 #include <stdarg.h>
 #include "core.h"
-#include "ezgrpc2.h"
+#include "ezgrpc2_session.h"
 
 ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...) {
   va_list ap;
@@ -40,6 +40,8 @@ EZGRPC2_API void ezgrpc2_event_free(ezgrpc2_event_t *event) {
       }
     ezgrpc2_list_free(event->message.lmessages);
   } break;
+  case EZGRPC2_EVENT_CONNECT:
+  case EZGRPC2_EVENT_DISCONNECT:
   case EZGRPC2_EVENT_CANCEL:
   case EZGRPC2_EVENT_DATALOSS:
     break;

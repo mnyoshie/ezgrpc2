@@ -156,7 +156,7 @@ EZNFDS get_unused_pollfd_ndx(struct pollfd *fds, EZNFDS nb_fds) {
 void session_free(ezgrpc2_session_t *ezsession) {
   ezgrpc2_event_t *event = event_new(EZGRPC2_EVENT_DISCONNECT, 
       ezgrpc2_session_uuid_copy(&ezsession->session_uuid));
-  ezgrpc2_list_push_back(ezsession->levents, event);
+  ezgrpc2_list_push_back(ezsession->server->levents, event);
 
   nghttp2_session_terminate_session(ezsession->ngsession, 0);
   nghttp2_session_del(ezsession->ngsession);
@@ -214,7 +214,7 @@ int session_create(
     shutdown(sockfd, SHUT_RDWR);
     assert(0);  // TODO
   }
-  memcpy(&ezsession->server_http2_settings, &server->http2_settings, sizeof(ezgrpc2_server_settings_t));
+  ezsession->server = server;
 
 
   /**********************.
@@ -231,9 +231,9 @@ int session_create(
 
   /* 16kb frame size */
   nghttp2_settings_entry siv[] = {
-      {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, ezsession->server_http2_settings.initial_window_size},
-      {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, ezsession->server_http2_settings.max_frame_size},
-      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, ezsession->server_http2_settings.max_concurrent_streams},
+      {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, ezsession->server->http2_settings.initial_window_size},
+      {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, ezsession->server->http2_settings.max_frame_size},
+      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, ezsession->server->http2_settings.max_concurrent_streams},
   };
   res =
       nghttp2_submit_settings(ezsession->ngsession, NGHTTP2_FLAG_NONE, siv, 2);

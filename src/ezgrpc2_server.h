@@ -7,6 +7,13 @@
 #include "ezgrpc2_session_info.h"
 #include "ezgrpc2_session_uuid.h"
 
+#define EZGRPC2_SERVER_LOG_ALL (uint32_t)0xffffffff
+#define EZGRPC2_SERVER_LOG_QUIET (uint32_t)(0)
+#define EZGRPC2_SERVER_LOG_INF0 (uint32_t)(1 << 1)
+#define EZGRPC2_SERVER_LOG_WARNING (uint32_t)(1 << 2)
+#define EZGRPC2_SERVER_LOG_ERROR (uint32_t)(1 << 3)
+#define EZGRPC2_SERVER_LOG_DEBUG (uint32_t)(1 << 4)
+
 
 typedef struct ezgrpc2_server_t ezgrpc2_server_t;
 
@@ -81,6 +88,7 @@ ezgrpc2_list_t *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server_t *server);
 ezgrpc2_session_info_t *ezgrpc2_server_get_session_info(ezgrpc2_server_t *server, ezgrpc2_session_uuid_t *session_uuid);
 
 
+void ezgrpc2_server_log(ezgrpc2_server_t *server, uint32_t log_level, char *fmt, ...);
 
 #endif
 

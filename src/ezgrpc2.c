@@ -37,7 +37,7 @@
  *
  */
 
-#include "ezgrpc2.h"
+#include "ezgrpc2_session.h"
 
 #include <assert.h>
 #include <errno.h>

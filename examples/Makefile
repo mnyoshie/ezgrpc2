@@ -3,6 +3,8 @@
 CFLAGS += -I../src
 LDFLAGS += -L../src -l:libezgrpc2.a -lnghttp2 -lpthread 
 
+CFLAGS+=$(EXTRACFLAGS)
+
 targets = multi_threaded.bin
 targets += single_threaded.bin
 

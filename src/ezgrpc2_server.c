@@ -54,6 +54,8 @@ EZGRPC2_API ezgrpc2_server_t *ezgrpc2_server_new(
   server = calloc(1, sizeof(*server));
   assert(server != NULL);
 
+  server->logger_thread = thpool_new(1, 0);
+  assert(server->logger_thread != NULL);
   server->ipv4_addr = NULL;
   server->ipv6_addr = NULL;
   server->ipv4_port = ipv4_port;
@@ -212,9 +214,15 @@ EZGRPC2_API int ezgrpc2_server_poll(
   int timeout) {
   assert(levents != NULL);
   struct pollfd *fds = server->fds;
-  const EZNFDS nb_fds = server->nb_fds;
 
-  const int ready = EZPOLL(fds, nb_fds, timeout);
+#ifdef _WIN32
+  const ULONG nb_fds = server->nb_fds;
+  const int ready = WSAPoll(fds, nb_fds, timeout);
+#else
+  const nfds_t nb_fds = server->nb_fds;
+  const int ready = poll(fds, nb_fds, timeout);
+#endif
+
   if (ready <= 0)
     return ready;
 
@@ -237,8 +245,8 @@ EZGRPC2_API int ezgrpc2_server_poll(
     if (fds[i].fd != -1 && fds[i].revents & POLLIN) {
       server->sessions[i].nb_paths = nb_paths;
       server->sessions[i].paths = paths;
-      server->sessions[i].levents = levents;
-      server->sessions[i].server_settings = &server->server_settings;
+      server->sessions[i].server = server;
+      server->levents = levents;
       if (session_events(&server->sessions[i])) {
         if (close(server->sessions[i].sockfd)) {
           perror("close");
@@ -276,16 +284,47 @@ EZGRPC2_API void ezgrpc2_server_free(
   free(ezserver->ipv4_addr);
   free(ezserver->ipv6_addr);
   free(ezserver->sessions);
+  thpool_free(ezserver->logger_thread);
   free(ezserver);
+}
+
+typedef struct log_t log_t;
+struct log_t {
+  char *str;
+  FILE *fp;
+};
+
+static log_t *log_new(char *str, FILE *fp) {
+  log_t *r = malloc(sizeof(*r));
+  assert(r != NULL);
+  r->str = str;
+  r->fp = fp;
+  return r;
+}
+
+static void log_free(void *userdata) {
+  log_t *r = userdata;
+  free(r->str);
+  free(r);
+}
+
+static void logger(void *userdata) {
+  log_t *l = userdata;
+  char dt[128] = {0};
+  fprintf(l->fp, "[%s] ", ezgetdt(dt, sizeof(dt)));
+  fwrite(l->str, 1, strlen(l->str), l->fp);
+  log_free(l);
 }
 
 void ezgrpc2_server_log(ezgrpc2_server_t *server, uint32_t log_level, char *fmt, ...){
   if (!(log_level & server->server_settings.logging_level))
     return;
-  va_list args;
-  va_start(args, fmt);
-  char dt[128] = {0};
-  fprintf(server->server_settings.logging_fp, "[%s] ", ezgetdt(dt, sizeof(dt)));
-  vfprintf(server->server_settings.logging_fp, fmt, args);
-  va_end(args);
+  va_list ap;
+  va_start(ap, fmt);
+  char *buf = malloc(1024);
+  assert(buf != NULL);
+  vsnprintf(buf, 1024, fmt, ap);
+  log_t *l = log_new(buf, server->server_settings.logging_fp);
+  thpool_add_task(server->logger_thread, logger, l, log_free); 
+  va_end(ap);
 }

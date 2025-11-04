@@ -23,7 +23,9 @@ else
 endif
 targets += libezgrpc2.a
 
-objects = ezgrpc2.o
+objects = thpool.o
+
+objects += ezgrpc2.o
 objects += ezgrpc2_event.o
 objects += ezgrpc2_global.o
 objects += ezgrpc2_grpc_status.o

@@ -211,7 +211,7 @@ static int on_begin_headers_callback(nghttp2_session *session,
   ezgrpc2_stream_t *ezstream = stream_new(frame->hd.stream_id);
 
   ezstream->recv_len = 0;
-  ezstream->recv_data = malloc(ezsession->server_http2_settings.initial_window_size);
+  ezstream->recv_data = malloc(ezsession->server->http2_settings.initial_window_size);
 
   ezgrpc2_list_push_back(ezsession->lstreams, ezstream);
   nghttp2_session_set_stream_user_data(session, frame->hd.stream_id ,ezstream);
@@ -506,7 +506,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     );
     event->message.path_index = ezstream->path_index;
 
-    ezgrpc2_list_push_back(ezsession->levents, event);
+    ezgrpc2_list_push_back(ezsession->server->levents, event);
   }
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
     /* we've receaived an end stream but last message is truncated */
@@ -520,7 +520,7 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
     );
     event->dataloss.path_index = ezstream->path_index;
   
-    ezgrpc2_list_push_back(ezsession->levents, event);
+    ezgrpc2_list_push_back(ezsession->server->levents, event);
     //event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
   }
   return 0;
@@ -539,15 +539,16 @@ static int on_frame_send_callback(nghttp2_session *session,
   ezgrpc2_session_t *ezsession = user_data;
   switch (frame->hd.type) {
     case NGHTTP2_SETTINGS:
-      ezflog(ezsession->server_settings->logging_fp, "> FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
+      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
       return 0;
     case NGHTTP2_HEADERS:
-      ezflog(ezsession->server_settings->logging_fp, "> FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
+      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
       return 0;
     case NGHTTP2_DATA:
-      ezflog(ezsession->server_settings->logging_fp, "> FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return 0;
     case NGHTTP2_WINDOW_UPDATE:
+      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       // printf("frame window update %d\n",
       // frame->window_update.window_size_increment); int res;
       //    if ((res = nghttp2_session_set_local_window_size(session,
@@ -575,15 +576,16 @@ static int on_frame_recv_callback(nghttp2_session *session,
   ezgrpc2_session_t *ezsession = user_data;
   switch (frame->hd.type) {
     case NGHTTP2_SETTINGS:
-      ezflog(ezsession->server_settings->logging_fp, "< FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
+      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
       return on_frame_recv_settings(ezsession, frame);
     case NGHTTP2_HEADERS:
-      ezflog(ezsession->server_settings->logging_fp, "< FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
+      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
       return on_frame_recv_headers(ezsession, frame);
     case NGHTTP2_DATA:
-      ezflog(ezsession->server_settings->logging_fp, "< FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return on_frame_recv_data(ezsession, frame);
     case NGHTTP2_WINDOW_UPDATE:
+      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       // printf("frame window update %d\n",
       // frame->window_update.window_size_increment); int res;
       //    if ((res = nghttp2_session_set_local_window_size(session,
@@ -618,7 +620,7 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, u8 flags,
 
 
   /* prevent an attacker from pushing large POST data */
-  if ((ezstream->recv_len + len) > ezsession->server_http2_settings.initial_window_size) {
+  if ((ezstream->recv_len + len) > ezsession->server->http2_settings.initial_window_size) {
     nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
                               stream_id, 1);  // XXX send appropriate code
     atlog(COLSTR("POST data exceeds maximum allowed size, killing stream %d\n",

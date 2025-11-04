@@ -80,7 +80,6 @@ struct ezgrpc2_event_t {
   };
 };
 
-//#define event_new(a, b, c) event_new(a, b, c)
 void ezgrpc2_event_free(ezgrpc2_event_t *event);
 
 #endif
