@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <time.h>
 #include "core.h"
 #include "ezgrpc2_header.h"
@@ -307,21 +308,21 @@ int session_add(ezgrpc2_server_t *ezserver, ezgrpc2_list_t *levents, int listenf
   memset(&sockaddr, 0, sizeof(sockaddr));
   int confd = accept(listenfd, (struct sockaddr *)&sockaddr, &sockaddr_len);
   if (confd == -1) {
-    perror("accept");
+    ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_ERROR, "@ %s: accept: %s", __func__, strerror(errno));
     return 1;
   }
-  ezlog(COLSTR("incoming %s connection\n", BHBLU), sockaddr.ss_family == AF_INET ? "ipv4" : "ipv6");
+  ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_DEBUG, COLSTR("incoming %s connection\n", BHBLU), sockaddr.ss_family == AF_INET ? "ipv4" : "ipv6");
 
   EZNFDS ndx = get_unused_pollfd_ndx(fds, nb_fds);
   if (ndx == -1) {
-    ezlog("max clients reached\n");
+    ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_ERROR, "@ %s: max client reached", __func__);
     shutdown(confd, SHUT_RDWR);
     close(confd);
     return 1;
   }
 
   if (session_create(&ezserver->sessions[ndx], confd, &sockaddr, sockaddr_len, ezserver)) {
-    atlog("session create failed\n");
+    ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_ERROR, "@ %s: session_create failed", __func__);
     shutdown(confd, SHUT_RDWR);
     close(confd);
     return 1;
@@ -348,7 +349,7 @@ int session_events(ezgrpc2_session_t *ezsession) {
   if (nghttp2_session_want_read(ezsession->ngsession) &&
       (res = nghttp2_session_recv(ezsession->ngsession)))
     if (res) {
-      ezlog(COLSTR("nghttp2: %s. killing...\n", BHRED),
+      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_ERROR, COLSTR("@ %s: nghttp2: %s. killing...\n", BHRED), __func__,
             nghttp2_strerror(res));
       return 1;
     }
@@ -356,7 +357,7 @@ int session_events(ezgrpc2_session_t *ezsession) {
   while (nghttp2_session_want_write(ezsession->ngsession)) {
     res = nghttp2_session_send(ezsession->ngsession);
     if (res) {
-      ezlog(COLSTR("nghttp2: %s. killing...\n", BHRED),
+      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_ERROR, COLSTR("@ %s: nghttp2: %s. killing...\n", BHRED), __func__,
             nghttp2_strerror(res));
       return 1;
     }

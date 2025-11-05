@@ -264,16 +264,18 @@ EZGRPC2_API int ezgrpc2_server_poll(
 
 EZGRPC2_API void ezgrpc2_server_free(
   ezgrpc2_server_t *ezserver) {
+  if (ezserver == NULL)
+    return;
   for (EZNFDS i = 0; i < 2; i++)
   {
-    if (ezserver->fds[i].fd != -1) {
+    if (ezserver->fds != NULL && ezserver->fds[i].fd != -1) {
       close(ezserver->fds[i].fd);
     }
   }
 
   for (EZNFDS i = 2; i < ezserver->nb_fds; i++)
   {
-    if (ezserver->fds[i].fd != -1) {
+    if (ezserver->fds != NULL && ezserver->fds[i].fd != -1) {
       shutdown(ezserver->fds[i].fd, SHUT_RDWR);
       close(ezserver->fds[i].fd);
       session_free(&ezserver->sessions[i]);
@@ -317,7 +319,7 @@ static void logger(void *userdata) {
 }
 
 void ezgrpc2_server_log(ezgrpc2_server_t *server, uint32_t log_level, char *fmt, ...){
-  if (!(log_level & server->server_settings.logging_level))
+  if (!(log_level & EZGRPC2_SERVER_LOG_NORMAL || log_level & server->server_settings.logging_level))
     return;
   va_list ap;
   va_start(ap, fmt);

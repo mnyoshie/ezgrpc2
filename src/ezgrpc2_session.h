@@ -53,7 +53,7 @@ extern "C" {
  *    * If the stream_id doesn't exists, 2.
  *
  */
-int ezgrpc2_session_send(
+int ezgrpc2_server_session_stream_send(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
@@ -69,14 +69,14 @@ int ezgrpc2_session_send(
  *
  *    * If the stream_id doesn't exists, 2.
  */
-int ezgrpc2_session_end_stream(
+int ezgrpc2_server_session_stream_end(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
   ezgrpc2_grpc_status_t status);
 
 /**
- * The :c:func:`ezgrpc2_session_end_session()` ends the session
+ * The :c:func:`ezgrpc2_server_session_end()` ends the session
  * associated with the session_uuid.
  *
  * :returns:
@@ -84,11 +84,11 @@ int ezgrpc2_session_end_stream(
  *
  *    * If the session doesn't exists, 1.
  */
-int ezgrpc2_session_end_session(
+int ezgrpc2_server_session_end(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_id,
   i32 last_stream_id,
-  ezgrpc2_grpc_status_t status);
+  int status);
 
 #if 0
 /* list of ezgrpc2_header_t */
@@ -127,7 +127,7 @@ ezgrpc2_list_t ezgrpc2_session_get_headers(
  * .. note::
  *    Strings are compared ignoring case
  * */
-int ezgrpc2_session_find_header(
+int ezgrpc2_server_session_stream_find_header(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,

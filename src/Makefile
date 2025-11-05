@@ -25,7 +25,6 @@ targets += libezgrpc2.a
 
 objects = thpool.o
 
-objects += ezgrpc2.o
 objects += ezgrpc2_event.o
 objects += ezgrpc2_global.o
 objects += ezgrpc2_grpc_status.o
@@ -37,6 +36,7 @@ objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
 objects += ezgrpc2_server.o
 objects += ezgrpc2_server_settings.o
+objects += ezgrpc2_session.o
 objects += ezgrpc2_session_info.o
 objects += ezgrpc2_session_uuid.o
 objects += internal_helpers.o

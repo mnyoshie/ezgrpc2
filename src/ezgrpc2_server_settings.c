@@ -48,7 +48,7 @@ EZGRPC2_API void ezgrpc2_server_settings_set_logging_fp(ezgrpc2_server_settings_
   server_settings->logging_fp = fp;
 }
 
-EZGRPC2_API void ezgrpc2_server_settings_set_logging_level(ezgrpc2_server_settings_t *server_settings, uint32_t logging_level) {
+EZGRPC2_API void ezgrpc2_server_settings_set_log_level(ezgrpc2_server_settings_t *server_settings, uint32_t logging_level) {
   server_settings->logging_level = logging_level;
 }
 //void ezgrpc2_server_settings_set_write_callback(ezgrpc2_server_settings_t *server_settings,

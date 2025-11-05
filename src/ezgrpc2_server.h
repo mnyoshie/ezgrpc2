@@ -9,11 +9,17 @@
 
 #define EZGRPC2_SERVER_LOG_ALL (uint32_t)0xffffffff
 #define EZGRPC2_SERVER_LOG_QUIET (uint32_t)(0)
-#define EZGRPC2_SERVER_LOG_INF0 (uint32_t)(1 << 1)
-#define EZGRPC2_SERVER_LOG_WARNING (uint32_t)(1 << 2)
-#define EZGRPC2_SERVER_LOG_ERROR (uint32_t)(1 << 3)
-#define EZGRPC2_SERVER_LOG_DEBUG (uint32_t)(1 << 4)
+#define EZGRPC2_SERVER_LOG_NORMAL (uint32_t)(1)
+#define EZGRPC2_SERVER_LOG_WARNING (uint32_t)(1 << 1)
+#define EZGRPC2_SERVER_LOG_ERROR (uint32_t)(1 << 2)
+#define EZGRPC2_SERVER_LOG_DEBUG (uint32_t)(1 << 3)
+#define EZGRPC2_SERVER_LOG_TRACE (uint32_t)(1 << 4)
 
+#define EZGRPC2_LOG_NORMAL(server, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_NORMAL, __VA_ARGS__)
+#define EZGRPC2_LOG_ERROR(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_ERROR, COLSTR("error: " fmt, BHRED), ##__VA_ARGS__)
+#define EZGRPC2_LOG_WARNING(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_WARNING, COLSTR("warning: " fmt, BHYEL), ##__VA_ARGS__)
+#define EZGRPC2_LOG_DEBUG(server, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_DEBUG, __VA_ARGS__)
+#define EZGRPC2_LOG_TRACE(server, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_TRACE, __VA_ARGS__)
 
 typedef struct ezgrpc2_server_t ezgrpc2_server_t;
 
@@ -89,6 +95,7 @@ ezgrpc2_session_info_t *ezgrpc2_server_get_session_info(ezgrpc2_server_t *server
 
 
 void ezgrpc2_server_log(ezgrpc2_server_t *server, uint32_t log_level, char *fmt, ...);
+
 
 #endif
 

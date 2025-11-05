@@ -71,23 +71,26 @@ static void handle_event_message(ezgrpc2_event_t *event,
   if (path_userdata->is_unary) {
     if (event->message.end_stream == 0 || nb_msg != 1) {
       /* This is unary service, but they are sending more than one message */
-      ezgrpc2_session_end_stream(server, event->session_uuid,
+      ezgrpc2_server_session_stream_end(server, event->session_uuid,
                                  event->message.stream_id,
                                  EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
       return;
     }
   }
   ezgrpc2_list_t *lmessages = path_userdata->callback(event->message.lmessages);
-  switch (ezgrpc2_session_send(server, event->session_uuid, event->message.stream_id, lmessages)){
+  switch (ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, lmessages)){
     case 0:
      /* ok */
       if (event->message.end_stream)
-        ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
+        ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
       break;
     case 1:
       break;
     case 2:
       printf(">stream id doesn't exists %d\n", event->message.stream_id);
+      break;
+    case 3:
+      printf("fatal\n");
       break;
     default:
       assert(0);
@@ -99,7 +102,7 @@ static void handle_event_message(ezgrpc2_event_t *event,
 static void handle_event_dataloss(ezgrpc2_event_t *event,
                                  struct path_userdata_t *path_userdata,
                                  ezgrpc2_server_t *server) {
-   ezgrpc2_session_end_stream(server, event->session_uuid, event->dataloss.stream_id, EZGRPC2_GRPC_STATUS_DATA_LOSS);
+   ezgrpc2_server_session_stream_end(server, event->session_uuid, event->dataloss.stream_id, EZGRPC2_GRPC_STATUS_DATA_LOSS);
 }
 
 static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezgrpc2_path_t *paths,

@@ -1,7 +1,7 @@
 all :
-	make -C src
-	make -C examples
+	$(MAKE) -C src
+	$(MAKE) -C examples
 
 clean :
-	make -C src clean
-	make -C examples clean
+	$(MAKE) -C src clean
+	$(MAKE) -C examples clean

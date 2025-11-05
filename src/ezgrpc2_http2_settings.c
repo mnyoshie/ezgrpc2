@@ -10,26 +10,10 @@
 #include <sys/socket.h>
 #endif
 
-static ssize_t write_cb(void *const sock, void *buf, size_t len, int flags) {
-#ifdef _WIN32
-  return send(*(SOCKET*)sock, buf, len, flags);
-#else
-  return send(*(int* const)sock, buf, len, flags);
-#endif
-}
-
-static ssize_t read_cb(void *const sock, void *buf, size_t len, int flags) {
-#ifdef _WIN32
-  return recv(*(SOCKET* const)sock, buf, len, flags);
-#else
-  return recv(*(int* const)sock, buf, len, flags);
-#endif
-}
-
 static ezgrpc2_http2_settings_t default_http2_settings = {
   .initial_window_size = 1 << 20,
   .max_frame_size = 16*1024,
-  .max_concurrent_streams = 32
+  .max_concurrent_streams = 1024
 };
 
 ezgrpc2_http2_settings_t *ezgrpc2_http2_settings_new(void *unused) {

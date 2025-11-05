@@ -61,16 +61,16 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list_t *lmessag
 /* ----------- BEGIN NGHTTP2 CALLBACKS ------------------*/
 
 
-nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
+nghttp2_ssize data_source_read_callback2(nghttp2_session *ngsession,
                                          i32 stream_id, u8 *buf, size_t buf_len,
                                          u32 *data_flags,
                                          nghttp2_data_source *source,
                                          void *user_data) {
-  (void)session;
+  ezgrpc2_session_t *ezsession = user_data;
   (void)stream_id;
   (void)user_data;
   if (buf_len < 5) {
-    atlog(COLSTR("error buf_len < 5\n", BHRED));
+    EZGRPC2_LOG_DEBUG(ezsession->server, "@ %s error buf_len < 5\n", __func__);
     return NGHTTP2_INTERNAL_ERROR;
   }
 //  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
@@ -125,7 +125,7 @@ nghttp2_ssize data_source_read_callback2(nghttp2_session *session,
     break;
   } 
 exit:
-  atlog("read done %d bytes\n", buf_seek);
+  EZGRPC2_LOG_DEBUG(ezsession->server, "read done %d bytes\n", buf_seek);
  // *data_flags = NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM;
   return buf_seek;
 }
@@ -143,8 +143,8 @@ static nghttp2_ssize ngsend_callback(nghttp2_session *session, const u8 *data,
 
   EZSSIZE ret = send(ezsession->sockfd, data, length, 0);
   if (ret < 0) {
-    atlog("error %s\n", strerror(errno));
     if (errno == EAGAIN || errno == EWOULDBLOCK) return NGHTTP2_ERR_WOULDBLOCK;
+      EZGRPC2_LOG_DEBUG(ezsession->server, "@ %s: send: %s\n", __func__, strerror(errno));
 
     return NGHTTP2_ERR_CALLBACK_FAILURE;
   }
@@ -184,7 +184,7 @@ static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t l
       case EWOULDBLOCK:
         return NGHTTP2_ERR_WOULDBLOCK;
       default:
-        atlog("failure: %s\n", strerror(errno));
+        EZGRPC2_LOG_DEBUG(ezsession->server, "@ %s: recv: %s\n", __func__, strerror(errno));
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 #endif
@@ -406,12 +406,10 @@ static inline int on_frame_recv_headers(ezgrpc2_session_t *ezsession, const nght
 
 static inline int on_frame_recv_settings(ezgrpc2_session_t *ezsession, const nghttp2_frame *frame) {
   if (frame->hd.stream_id != 0){
-    atlog("received a SETTINGS frame at stream_id 0. immediately returning\n");
+    EZGRPC2_LOG_DEBUG(ezsession->server, "received a SETTINGS frame at stream_id 0. immediately returning\n");
     return 0;
   }
 
-  atlog("ack %d, length %zu\n", frame->settings.hd.flags,
-         frame->settings.hd.length);
   if (!(frame->settings.hd.flags & NGHTTP2_FLAG_ACK)) {
     // apply settings
 //    for (size_t i = 0; i < frame->settings.niv; i++) {
@@ -474,18 +472,18 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0) {
     /* In scenarios where the Request stream needs to be closed but no data remains
      * to be sent implementations MUST send an empty DATA frame with this flag set. */
-//    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-//    ezgrpc2_event_t *event = event_new(
-//      EZGRPC2_EVENT_MESSAGE,
-//      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
-//      ((ezgrpc2_event_message_t) {
-//        .lmessages = lmessages,
-//        .end_stream = 1,
-//        .stream_id = frame->hd.stream_id,
-//      })
-//    );
-//
-//    ezgrpc2_list_push_back(ezstream->path->levents, event);
+    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
+    ezgrpc2_event_t *event = event_new(
+      EZGRPC2_EVENT_MESSAGE,
+      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
+      ((ezgrpc2_event_message_t) {
+        .lmessages = lmessages,
+        .end_stream = 1,
+        .stream_id = frame->hd.stream_id,
+      })
+    );
+
+    ezgrpc2_list_push_back(ezsession->server->levents, event);
     return 0;
   }
 
@@ -539,16 +537,16 @@ static int on_frame_send_callback(nghttp2_session *session,
   ezgrpc2_session_t *ezsession = user_data;
   switch (frame->hd.type) {
     case NGHTTP2_SETTINGS:
-      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
+      EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
       return 0;
     case NGHTTP2_HEADERS:
-      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
+      EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
       return 0;
     case NGHTTP2_DATA:
-      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return 0;
     case NGHTTP2_WINDOW_UPDATE:
-      ezgrpc2_server_log(ezsession->server, EZGRPC2_SERVER_LOG_DEBUG, "> FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       // printf("frame window update %d\n",
       // frame->window_update.window_size_increment); int res;
       //    if ((res = nghttp2_session_set_local_window_size(session,
@@ -576,16 +574,16 @@ static int on_frame_recv_callback(nghttp2_session *session,
   ezgrpc2_session_t *ezsession = user_data;
   switch (frame->hd.type) {
     case NGHTTP2_SETTINGS:
-      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
+      EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
       return on_frame_recv_settings(ezsession, frame);
     case NGHTTP2_HEADERS:
-      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
+      EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[HEADERS, sid=%d, eos=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
       return on_frame_recv_headers(ezsession, frame);
     case NGHTTP2_DATA:
-      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return on_frame_recv_data(ezsession, frame);
     case NGHTTP2_WINDOW_UPDATE:
-      ezgrpc2_server_log(ezsession->server, 1, "< FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       // printf("frame window update %d\n",
       // frame->window_update.window_size_increment); int res;
       //    if ((res = nghttp2_session_set_local_window_size(session,

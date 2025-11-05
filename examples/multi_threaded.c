@@ -129,7 +129,7 @@ static void handle_event_message(ezgrpc2_event_t *event,
   if (path_userdata->is_unary) {
     if (event->message.end_stream == 0 || nb_msg != 1) {
       /* This is unary service, but they are sending more than one message */
-      ezgrpc2_session_end_stream(server, event->session_uuid,
+      ezgrpc2_server_session_stream_end(server, event->session_uuid,
                                  event->message.stream_id,
                                  EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
       return;
@@ -238,11 +238,11 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
    }
    /* ezgrpc2_session_send() will empty data->lomessages if it succeeds.
     */
-   switch (ezgrpc2_session_send(server, data->session_uuid, data->stream_id, data->lomessages)){
+   switch (ezgrpc2_server_session_stream_send(server, data->session_uuid, data->stream_id, data->lomessages)){
      case 0:
       /* ok */
        if (data->end_stream)
-         ezgrpc2_session_end_stream(server, data->session_uuid, data->stream_id, data->status);
+         ezgrpc2_server_session_stream_end(server, data->session_uuid, data->stream_id, data->status);
        break;
      case 1:
        break;
@@ -250,6 +250,9 @@ static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool
        /* possibly the client sent a rst stream */
        printf("stream id doesn't exists %d\n", data->stream_id);
        /* free */
+       break;
+     case 3:
+       printf("fatal\n");
        break;
      default:
        assert(0);
@@ -351,7 +354,7 @@ int main() {
   /* setup server settings */
   ezgrpc2_server_settings_t *server_settings = ezgrpc2_server_settings_new(NULL);
   assert(server_settings != NULL);
-  ezgrpc2_server_settings_set_logging_level(server_settings, EZGRPC2_SERVER_LOG_DEBUG);
+  ezgrpc2_server_settings_set_log_level(server_settings, EZGRPC2_SERVER_LOG_ALL);
 
   /* The heart of this API */
   ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, server_settings, NULL);

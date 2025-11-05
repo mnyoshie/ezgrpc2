@@ -32,7 +32,6 @@ struct thpool_t {
 
   pthread_mutex_t mutex;
   pthread_cond_t wcond;
-  volatile int running;
   volatile int live;
   char stop;
 };
@@ -64,16 +63,11 @@ static void *worker(void *arg) {
       break;
     }
 
-    if (task != NULL)
-      pool->running++;
 
     force_assert(!pthread_mutex_unlock(&pool->mutex));
     if (task != NULL) {
       task->func(task->userdata);
       free(task);
-      force_assert(!pthread_mutex_lock(&pool->mutex));
-      pool->running--;
-      force_assert(!pthread_mutex_unlock(&pool->mutex));
     }
   }
   pool->live--;
@@ -88,7 +82,6 @@ thpool_t *thpool_new(int workers, int flags) {
   pthread_cond_init(&pool->wcond, NULL);
 
   pool->queue = ezgrpc2_list_new(NULL);
-  pool->running = 0;
   pool->live = 0;
   pool->nb_threads = workers;
   pool->stop = 0;
@@ -104,15 +97,6 @@ thpool_t *thpool_new(int workers, int flags) {
 
   while (pool->live != workers);
   return pool;
-}
-
-int thpool_is_empty(thpool_t *pool) {
-  force_assert(!pthread_mutex_lock(&pool->mutex));
-  int ret = pool->running == 0 &&
-    ezgrpc2_list_peek_front(pool->queue) == NULL;
-
-  force_assert(!pthread_mutex_unlock(&pool->mutex));
-  return ret;
 }
 
 int thpool_add_task(thpool_t *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*)) {

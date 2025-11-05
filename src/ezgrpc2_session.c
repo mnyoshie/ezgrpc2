@@ -37,7 +37,6 @@
  *
  */
 
-#include "ezgrpc2_session.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -53,6 +52,7 @@
 #include <nghttp2/nghttp2.h>
 
 
+#include "ezgrpc2_session.h"
 #include "ezgrpc2_event.h"
 #include "ezgrpc2_server_settings.h"
 #include "ezgrpc2_server_settings_struct.h"
@@ -176,7 +176,7 @@ size_t count_grpc_message(void *data, size_t len, int *nb_message) {
 
 
 
-EZGRPC2_API int ezgrpc2_session_send(
+EZGRPC2_API int ezgrpc2_server_session_stream_send(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
@@ -203,7 +203,7 @@ EZGRPC2_API int ezgrpc2_session_send(
   while (nghttp2_session_want_write(ezsession->ngsession)) {
     res = nghttp2_session_send(ezsession->ngsession);
     if (res) {
-      ezlog(COLSTR("nghttp2: %s. killing...\n", BHRED),
+      ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_DEBUG, COLSTR("@ %s: nghttp2: %s. killing...\n", BHRED), __func__,
             nghttp2_strerror(res));
       return 3;
     }
@@ -221,7 +221,7 @@ EZGRPC2_API int ezgrpc2_session_send(
 
 
 
-EZGRPC2_API int ezgrpc2_session_end_stream(
+EZGRPC2_API int ezgrpc2_server_session_stream_end(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id,
@@ -262,7 +262,7 @@ EZGRPC2_API int ezgrpc2_session_end_stream(
 
 
 
-EZGRPC2_API int ezgrpc2_session_end_session(
+EZGRPC2_API int ezgrpc2_server_session_end(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 last_stream_id,
@@ -278,7 +278,7 @@ EZGRPC2_API int ezgrpc2_session_end_session(
   return 0;
 }
 
-EZGRPC2_API int ezgrpc2_session_find_header(
+EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
   ezgrpc2_server_t *ezserver,
   ezgrpc2_session_uuid_t *session_uuid,
   i32 stream_id, ezgrpc2_header_t *ezheader) {
