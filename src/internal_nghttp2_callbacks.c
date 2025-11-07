@@ -66,7 +66,9 @@ nghttp2_ssize data_source_read_callback2(nghttp2_session *ngsession,
                                          u32 *data_flags,
                                          nghttp2_data_source *source,
                                          void *user_data) {
+#ifdef EZGRPC2_DEBUG
   ezgrpc2_session_t *ezsession = user_data;
+#endif
   (void)stream_id;
   (void)user_data;
   if (buf_len < 5) {
@@ -167,9 +169,9 @@ static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t l
                                int flags, void *user_data) {
   ezgrpc2_session_t *ezsession = user_data;
 
-  EZSSIZE ret = recv(ezsession->sockfd, buf, length, 0);
-  if (ret == EZSOCKET_ERROR) {
 #ifdef _WIN32
+  int ret = recv(ezsession->sockfd, buf, length, 0);
+  if (ret == SOCKET_ERROR) {
     int wsa;
     switch ((wsa = WSAGetLastError())) {
       case WSAEWOULDBLOCK:
@@ -179,7 +181,10 @@ static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t l
         atlog("failure errno %d\n", wsa);
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
+  }
 #else
+  ssize_t ret = recv(ezsession->sockfd, buf, length, 0);
+  if (ret == -1) {
     switch (errno) {
       case EWOULDBLOCK:
         return NGHTTP2_ERR_WOULDBLOCK;
@@ -187,12 +192,10 @@ static nghttp2_ssize ngrecv_callback(nghttp2_session *session, u8 *buf, size_t l
         EZGRPC2_LOG_DEBUG(ezsession->server, "@ %s: recv: %s\n", __func__, strerror(errno));
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-#endif
   }
-
-#ifdef EZENABLE_DEBUG
-  atlog("ok. read %zu bytes\n", ret);
 #endif
+
+  EZGRPC2_LOG_TRACE(ezsession->server, "@ %s: ok. read %zu bytes\n", __func__, ret);
   return ret;
 }
 
@@ -531,10 +534,10 @@ static inline int on_frame_recv_data(ezgrpc2_session_t *ezsession, const nghttp2
 
 static int on_frame_send_callback(nghttp2_session *session,
                                   const nghttp2_frame *frame, void *user_data) {
-#ifdef EZENABLE_DEBUG
-  atlog("frame type: %d, stream id %d\n", frame->hd.type, frame->hd.stream_id);
-#endif
+#ifdef EZGRPC2_TRACE
   ezgrpc2_session_t *ezsession = user_data;
+#endif
+
   switch (frame->hd.type) {
     case NGHTTP2_SETTINGS:
       EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[SETTINGS, sid=%d, ack=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_ACK));
@@ -546,7 +549,7 @@ static int on_frame_send_callback(nghttp2_session *session,
       EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return 0;
     case NGHTTP2_WINDOW_UPDATE:
-      EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      EZGRPC2_LOG_TRACE(ezsession->server, "> FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu, wsi=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length, frame->window_update.window_size_increment);
       // printf("frame window update %d\n",
       // frame->window_update.window_size_increment); int res;
       //    if ((res = nghttp2_session_set_local_window_size(session,
@@ -583,7 +586,7 @@ static int on_frame_recv_callback(nghttp2_session *session,
       EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return on_frame_recv_data(ezsession, frame);
     case NGHTTP2_WINDOW_UPDATE:
-      EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
+      EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu, wsi=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length, frame->window_update.window_size_increment);
       // printf("frame window update %d\n",
       // frame->window_update.window_size_increment); int res;
       //    if ((res = nghttp2_session_set_local_window_size(session,

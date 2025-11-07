@@ -28,6 +28,7 @@ struct thpool_t;
  *   thpool_t *pool = thpool_new(4, 0);
  */
 thpool_t *thpool_new(int workers, int flags);
+int thpool_init(thpool_t *pool, int workers, int flags);
 
 /**
  * Adds task to the thread pool.
@@ -143,7 +144,8 @@ int thpool_add_task(thpool_t *pool, void (*func)(void*), void *userdata, void (*
  * if setted, is called with the argument ``userdata`` and ``ret``, respectively.
  *
  */
-void thpool_free(thpool_t *pool);
+void thpool_free(thpool_t pool);
+void thpool_freep(thpool_t *pool);
 
 
 /**
@@ -157,6 +159,7 @@ void thpool_free(thpool_t *pool);
 int thpool_is_empty(thpool_t *pool);
 
 void thpool_stop_and_join(thpool_t *pool);
+
 
 
 #endif

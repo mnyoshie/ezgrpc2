@@ -1,11 +1,11 @@
 /* pthpool.c - A pollable thread pool */
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
-#include "ezgrpc2_list.h"
 //#include "core.h"
 
 #include "thpool.h"
+
+#include "thpool_struct.h"
 
 
 #define force_assert(s)                                                        \
@@ -17,24 +17,6 @@
     }                                                                          \
   } while (0)
 
-struct thpool_t {
-  size_t max_queue, max_finished;
-
-#ifdef NO_COUNT
-  size_t nb_finished, nb_queue;
-#endif
-  // task queue
-  ezgrpc2_list_t *queue;
-  // finished task queue
-
-  int nb_threads;
-  pthread_t *threads;
-
-  pthread_mutex_t mutex;
-  pthread_cond_t wcond;
-  volatile int live;
-  char stop;
-};
 
 typedef struct task_t task_t;
 struct task_t {
@@ -99,6 +81,28 @@ thpool_t *thpool_new(int workers, int flags) {
   return pool;
 }
 
+int thpool_init(thpool_t *pool, int workers, int flags) {
+  pthread_mutex_init(&pool->mutex, NULL);
+  pthread_cond_init(&pool->wcond, NULL);
+
+  pool->queue = ezgrpc2_list_new(NULL);
+  pool->live = 0;
+  pool->nb_threads = workers;
+  pool->stop = 0;
+
+  pthread_t *threads = malloc(sizeof(*threads)*workers);
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+  for (int i = 0; i < workers; i++)
+    pthread_create(threads + i, NULL, worker, pool);
+  pthread_attr_destroy(&attr);
+  pool->threads = threads;
+
+  while (pool->live != workers);
+  return 0;
+}
+
 int thpool_add_task(thpool_t *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*)) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int c = 0;
@@ -135,7 +139,7 @@ void thpool_stop_and_join(thpool_t *pool) {
 
 }
 
-void thpool_free(thpool_t *pool) {
+void thpool_freep(thpool_t *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
@@ -151,4 +155,21 @@ void thpool_free(thpool_t *pool) {
 
   free(pool->threads);
   free(pool);
+}
+
+void thpool_free(thpool_t pool) {
+  force_assert(!pthread_mutex_lock(&pool.mutex));
+  pool.stop = 1;
+  force_assert(!pthread_cond_broadcast(&pool.wcond));
+  force_assert(!pthread_mutex_unlock(&pool.mutex));
+  for (int i = 0; i < pool.nb_threads; i++)
+    pthread_join(pool.threads[i], NULL);
+
+  task_t *d;
+
+  while ((d = ezgrpc2_list_pop_front(pool.queue)) != NULL)
+    if (d->userdata_cleanup != NULL)
+      d->userdata_cleanup(d->userdata);
+
+  free(pool.threads);
 }

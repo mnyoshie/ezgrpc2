@@ -1,3 +1,5 @@
+#include <errno.h>
+
 #include "core.h"
 #include "ezgrpc2_server.h"
 #include "ezgrpc2_session_info.h"
@@ -54,8 +56,7 @@ EZGRPC2_API ezgrpc2_server_t *ezgrpc2_server_new(
   server = calloc(1, sizeof(*server));
   assert(server != NULL);
 
-  server->logger_thread = thpool_new(1, 0);
-  assert(server->logger_thread != NULL);
+  thpool_init(&server->logger_thread, 1, 0);
   server->ipv4_addr = NULL;
   server->ipv6_addr = NULL;
   server->ipv4_port = ipv4_port;
@@ -248,8 +249,9 @@ EZGRPC2_API int ezgrpc2_server_poll(
       server->sessions[i].server = server;
       server->levents = levents;
       if (session_events(&server->sessions[i])) {
+	EZGRPC2_LOG_TRACE(server,  "closing session %p", (void*) &server->sessions[i]);
         if (close(server->sessions[i].sockfd)) {
-          perror("close");
+	  EZGRPC2_LOG_ERROR(server, "@ %s: close: %s", __func__, strerror(errno));
         }
         fds[i].fd = -1;
         session_free(&server->sessions[i]);
@@ -327,6 +329,6 @@ void ezgrpc2_server_log(ezgrpc2_server_t *server, uint32_t log_level, char *fmt,
   assert(buf != NULL);
   vsnprintf(buf, 1024, fmt, ap);
   log_t *l = log_new(buf, server->server_settings.logging_fp);
-  thpool_add_task(server->logger_thread, logger, l, log_free); 
+  thpool_add_task(&server->logger_thread, logger, l, log_free); 
   va_end(ap);
 }

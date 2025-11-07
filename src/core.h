@@ -4,8 +4,10 @@
 #include <assert.h>
 #include <unistd.h>
 #include <stdbool.h>
-#include "thpool.h"
 #include <nghttp2/nghttp2.h>
+
+#include "thpool.h"
+#include "thpool_struct.h"
 
 #ifdef _WIN32
 #  include <winsock2.h>
@@ -96,7 +98,6 @@ struct ezgrpc2_stream_t {
   /* just a bool. if content type is application/grpc* */
   bool is_content_grpc : 1;
 
-  bool is_trunc : 1;
 
   /* stores `:path` */
   ezgrpc2_path_t *path;
@@ -106,6 +107,7 @@ struct ezgrpc2_stream_t {
   size_t recv_len;
   u8 *recv_data;
 
+  bool is_trunc : 1;
   size_t trunc_seek;
   ezgrpc2_list_t *lqueue_omessages;
 };
@@ -155,7 +157,7 @@ struct ezgrpc2_server_t {
   nghttp2_session *ngsession;
   ezgrpc2_server_settings_t server_settings;
   ezgrpc2_http2_settings_t http2_settings;
-  thpool_t *logger_thread;
+  thpool_t logger_thread;
   ezgrpc2_list_t *levents;
 
   u16 ipv4_port;

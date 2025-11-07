@@ -311,18 +311,18 @@ int session_add(ezgrpc2_server_t *ezserver, ezgrpc2_list_t *levents, int listenf
     ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_ERROR, "@ %s: accept: %s", __func__, strerror(errno));
     return 1;
   }
-  ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_DEBUG, COLSTR("incoming %s connection\n", BHBLU), sockaddr.ss_family == AF_INET ? "ipv4" : "ipv6");
+  EZGRPC2_LOG_DEBUG(ezserver, "incoming %s connection\n", sockaddr.ss_family == AF_INET ? "ipv4" : "ipv6");
 
   EZNFDS ndx = get_unused_pollfd_ndx(fds, nb_fds);
   if (ndx == -1) {
-    ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_ERROR, "@ %s: max client reached", __func__);
+    EZGRPC2_LOG_ERROR(ezserver, "@ %s: max client reached", __func__);
     shutdown(confd, SHUT_RDWR);
     close(confd);
     return 1;
   }
 
   if (session_create(&ezserver->sessions[ndx], confd, &sockaddr, sockaddr_len, ezserver)) {
-    ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_ERROR, "@ %s: session_create failed", __func__);
+    EZGRPC2_LOG_ERROR(ezserver, "@ %s: session_create failed", __func__);
     shutdown(confd, SHUT_RDWR);
     close(confd);
     return 1;

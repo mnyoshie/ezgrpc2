@@ -203,7 +203,7 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send(
   while (nghttp2_session_want_write(ezsession->ngsession)) {
     res = nghttp2_session_send(ezsession->ngsession);
     if (res) {
-      ezgrpc2_server_log(ezserver, EZGRPC2_SERVER_LOG_DEBUG, COLSTR("@ %s: nghttp2: %s. killing...\n", BHRED), __func__,
+      EZGRPC2_LOG_ERROR(ezserver, "%s: %p.%p: nghttp2: %s\n", __func__, (void*)ezserver, (void*) ezsession,
             nghttp2_strerror(res));
       return 3;
     }
@@ -244,11 +244,11 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end(
        strlen(grpc_message)},
   };
   if (!ezgrpc2_list_is_empty(ezstream->lqueue_omessages)) {
-    atlog(COLSTR("ending stream but messages are still queued\n", BHRED));
+    EZGRPC2_LOG_TRACE(ezserver, "ending stream but messages are still queued\n");
 
   }
   nghttp2_submit_trailer(ezsession->ngsession, stream_id, trailers, 2);
-  atlog("trailer submitted\n");
+  EZGRPC2_LOG_TRACE(ezserver, "trailer submitted\n");
   nghttp2_session_send(ezsession->ngsession);
   return 0;
 }

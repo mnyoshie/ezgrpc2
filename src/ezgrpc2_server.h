@@ -18,8 +18,18 @@
 #define EZGRPC2_LOG_NORMAL(server, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_NORMAL, __VA_ARGS__)
 #define EZGRPC2_LOG_ERROR(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_ERROR, COLSTR("error: " fmt, BHRED), ##__VA_ARGS__)
 #define EZGRPC2_LOG_WARNING(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_WARNING, COLSTR("warning: " fmt, BHYEL), ##__VA_ARGS__)
+
+#ifdef EZGRPC2_DEBUG
 #define EZGRPC2_LOG_DEBUG(server, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_DEBUG, __VA_ARGS__)
+#else
+#define EZGRPC2_LOG_DEBUG(server, ...) do {} while (0)
+#endif
+
+#ifdef EZGRPC2_TRACE
 #define EZGRPC2_LOG_TRACE(server, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_TRACE, __VA_ARGS__)
+#else
+#define EZGRPC2_LOG_TRACE(server, ...) do {} while (0)
+#endif
 
 typedef struct ezgrpc2_server_t ezgrpc2_server_t;
 
