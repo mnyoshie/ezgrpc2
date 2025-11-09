@@ -139,7 +139,7 @@ void thpool_stop_and_join(thpool_t *pool) {
 
 }
 
-void thpool_freep(thpool_t *pool) {
+void thpool_free(thpool_t *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
@@ -155,21 +155,4 @@ void thpool_freep(thpool_t *pool) {
 
   free(pool->threads);
   free(pool);
-}
-
-void thpool_free(thpool_t pool) {
-  force_assert(!pthread_mutex_lock(&pool.mutex));
-  pool.stop = 1;
-  force_assert(!pthread_cond_broadcast(&pool.wcond));
-  force_assert(!pthread_mutex_unlock(&pool.mutex));
-  for (int i = 0; i < pool.nb_threads; i++)
-    pthread_join(pool.threads[i], NULL);
-
-  task_t *d;
-
-  while ((d = ezgrpc2_list_pop_front(pool.queue)) != NULL)
-    if (d->userdata_cleanup != NULL)
-      d->userdata_cleanup(d->userdata);
-
-  free(pool.threads);
 }

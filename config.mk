@@ -15,7 +15,7 @@ ifeq ($(T),1)
 endif
 
 ifeq ($(ASAN),1)
-  LDFLAGS += -fsanitize=address
-  CFLAGS += -fsanitize=address
+  LDFLAGS += -fsanitize=address,undefined
+  CFLAGS += -fsanitize=address,undefined
 endif
 

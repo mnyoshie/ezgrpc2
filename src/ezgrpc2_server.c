@@ -288,7 +288,7 @@ EZGRPC2_API void ezgrpc2_server_free(
   free(ezserver->ipv4_addr);
   free(ezserver->ipv6_addr);
   free(ezserver->sessions);
-  thpool_free(ezserver->logger_thread);
+  thpool_free(&ezserver->logger_thread);
   free(ezserver);
 }
 

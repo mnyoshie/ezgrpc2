@@ -10,24 +10,6 @@
 typedef struct thpool_t thpool_t;
 struct thpool_t;
 
-/**
- * Initializes the thread pool.
- *
- * :param workers: The numbers of threads to be spawned in
- *                 the thread pool
- * :param flags: unused. Must be set to 0.
- * :returns:
- *     * On success, a pointer to the initialized thread pool.
- *
- *     * On failure, ``NULL``.
- *
- * Example:
- *
- * .. code-block:: C
- *
- *   thpool_t *pool = thpool_new(4, 0);
- */
-thpool_t *thpool_new(int workers, int flags);
 int thpool_init(thpool_t *pool, int workers, int flags);
 
 /**
@@ -144,8 +126,7 @@ int thpool_add_task(thpool_t *pool, void (*func)(void*), void *userdata, void (*
  * if setted, is called with the argument ``userdata`` and ``ret``, respectively.
  *
  */
-void thpool_free(thpool_t pool);
-void thpool_freep(thpool_t *pool);
+void thpool_free(thpool_t *pool);
 
 
 /**

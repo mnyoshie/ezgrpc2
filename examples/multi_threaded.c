@@ -305,9 +305,7 @@ int main() {
   /* In a real application, user must configure the server
    * to handle SIGTERM, and make sure to prevent these
    * signal from propagating through the main threads and
-   * pool threads via pthread_sigmask(SIG_BLOCK, ...) for
-   * the signal handler and pthread_sigmask(SIG_SETMASK, ...)
-   * for the rest. 
+   * pool threads via pthread_sigmask(SIG_BLOCK, ...)
    */
   sigset_t sigset;
   sigemptyset(&sigset);
@@ -324,15 +322,6 @@ int main() {
   res = pthread_create(&sig_thread, NULL, signal_handler, &sigset);
   if (res) {
     fprintf(stderr, "pthread_create failed\n");
-    abort();
-  }
-
-  /* make sure the signals won't propagate through the
-   * main thread and worker threads
-   */
-  res = pthread_sigmask(SIG_SETMASK, &sigset, NULL);
-  if (res != 0) {
-    fprintf(stderr, "pthread_sigmask failed\n");
     abort();
   }
 #endif /* __unix__ */
@@ -355,6 +344,7 @@ int main() {
   ezgrpc2_server_settings_t *server_settings = ezgrpc2_server_settings_new(NULL);
   assert(server_settings != NULL);
   ezgrpc2_server_settings_set_log_level(server_settings, EZGRPC2_SERVER_LOG_ALL);
+  ezgrpc2_server_settings_set_log_fp(server_settings, stderr);
 
   /* The heart of this API */
   ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, server_settings, NULL);
@@ -446,7 +436,7 @@ int main() {
     printf("poll err\n");
   }
 
-
+  puts("exiting");
   /* we are sure these are empty because we break the while loop before polling */
   ezgrpc2_list_free(levents);
   ezgrpc2_server_free(server);

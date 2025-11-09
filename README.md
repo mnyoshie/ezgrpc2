@@ -127,13 +127,13 @@ ezgrpc2_list_push_back(lmessages, message);
 
 Sending a message:
 ```c
-ezgrpc2_session_send(server, event->session_uuid, event->message.stream_id, lmessages);
+ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, lmessages);
 ezgrpc2_list_free(lmessages);
 ```
 
 Ending a stream:
 ```c
-ezgrpc2_session_end_stream(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
+ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
 ```
 
 when you're done using the server:

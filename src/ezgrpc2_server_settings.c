@@ -44,7 +44,7 @@ EZGRPC2_API void ezgrpc2_server_settings_set_max_connections(ezgrpc2_server_sett
   server_settings->max_connections = max_connections;
 }
 
-EZGRPC2_API void ezgrpc2_server_settings_set_logging_fp(ezgrpc2_server_settings_t *server_settings, FILE *fp) {
+EZGRPC2_API void ezgrpc2_server_settings_set_log_fp(ezgrpc2_server_settings_t *server_settings, FILE *fp) {
   server_settings->logging_fp = fp;
 }
 

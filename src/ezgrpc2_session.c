@@ -203,7 +203,7 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send(
   while (nghttp2_session_want_write(ezsession->ngsession)) {
     res = nghttp2_session_send(ezsession->ngsession);
     if (res) {
-      EZGRPC2_LOG_ERROR(ezserver, "%s: %p.%p: nghttp2: %s\n", __func__, (void*)ezserver, (void*) ezsession,
+      EZGRPC2_LOG_ERROR(ezserver, "@ %s: %p.%p: nghttp2: %s\n", __func__, (void*)ezserver, (void*) ezsession,
             nghttp2_strerror(res));
       return 3;
     }
@@ -296,7 +296,9 @@ EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
       == NULL)
     return 3;
 
-  return ezheader->value = found->value, ezheader->vlen = found->vlen, 0;
+  ezheader->value = found->value;
+  ezheader->valuelen = found->valuelen;
+  return 0;
 }
 
 

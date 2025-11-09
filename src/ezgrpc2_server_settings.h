@@ -1,9 +1,11 @@
 #ifndef EZGRPC2_SERVER_SETTINGS_H
 #define EZGRPC2_SERVER_SETTINGS_H
+#include <stdio.h>
 #include <stdlib.h>
 typedef struct ezgrpc2_server_settings_t ezgrpc2_server_settings_t;
 void ezgrpc2_server_settings_set_max_connections(ezgrpc2_server_settings_t *server_settings, size_t max_connections);
 void ezgrpc2_server_settings_set_log_level(ezgrpc2_server_settings_t *server_settings, uint32_t logging_level);
+void ezgrpc2_server_settings_set_log_fp(ezgrpc2_server_settings_t *server_settings, FILE *fp);
 //void ezgrpc2_server_settings_set_write_callback(ezgrpc2_server_settings_t *server_settings,
 //    ssize_t (*write)(void *sock, void *buf, size_t len, int flags)
 //    ){

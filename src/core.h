@@ -80,6 +80,7 @@ static char *strndup(char *c, size_t n) {
 //  u32 flow_control;
 //  u32 max_frame_size;
 //};
+//
 
 
 typedef struct ezgrpc2_stream_t ezgrpc2_stream_t;
@@ -89,6 +90,8 @@ struct ezgrpc2_stream_t {
   /* the time the stream is received by the server in
    * unix epoch */
   u64 time;
+  size_t nb_headers;
+  ezgrpc2_header_t *headers;
   ezgrpc2_list_t *lheaders;
 
   bool is_method_post : 1;

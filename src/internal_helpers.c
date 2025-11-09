@@ -26,9 +26,9 @@ int makenonblock(int sockfd) {
 int list_cmp_ezheader_name(const void *data, const void *userdata) {
   const ezgrpc2_header_t *a = data;
   const ezgrpc2_header_t *b = userdata;
-  return a->nlen == b->nlen ?
+  return a->namelen == b->namelen ?
       strncasecmp(a->name, b->name,
-        a->nlen & b->nlen): 1;
+        a->namelen & b->namelen): 1;
 }
 
 
@@ -368,6 +368,8 @@ ezgrpc2_stream_t *stream_new(i32 stream_id) {
   ezgrpc2_stream_t *ezstream = calloc(1, sizeof(*ezstream));
   ezstream->lqueue_omessages = ezgrpc2_list_new(NULL);
   ezstream->lheaders = ezgrpc2_list_new(NULL);
+  ezstream->nb_headers = 0;
+  ezstream->headers = NULL;
   ezstream->time = (uint64_t)time(NULL);
   ezstream->is_trunc = 0;
   ezstream->trunc_seek = 0;
@@ -376,14 +378,20 @@ ezgrpc2_stream_t *stream_new(i32 stream_id) {
 }
 /* only frees what is passed. it does not free all the linked lists */
 void stream_free(ezgrpc2_stream_t *ezstream) {
-  atlog("stream %d freed\n", ezstream->stream_id);
-  ezgrpc2_header_t *ezheader;
+  free(ezstream->recv_data);
 
+  ezgrpc2_header_t *ezheader;
   while ((ezheader = ezgrpc2_list_pop_front(ezstream->lheaders)) != NULL) {
     ezgrpc2_header_free(ezheader);
   }
-  free(ezstream->recv_data);
   ezgrpc2_list_free(ezstream->lheaders);
+
+  for (size_t i = 0; i < ezstream->nb_headers; i++) {
+    free(ezstream->headers[i].value);
+    free(ezstream->headers[i].name);
+  }
+  free(ezstream->headers);
+
   free(ezstream);
 }
 

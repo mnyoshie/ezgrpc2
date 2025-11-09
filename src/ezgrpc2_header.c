@@ -13,8 +13,8 @@ ezgrpc2_header_t *ezgrpc2_header_new(const u8 *name, size_t nlen, const u8 *valu
 
   memcpy(ezheader->name, name, nlen);
   memcpy(ezheader->value, value, vlen);
-  ezheader->nlen = nlen;
-  ezheader->vlen = vlen;
+  ezheader->namelen = nlen;
+  ezheader->valuelen = vlen;
 
   return ezheader;
 }
