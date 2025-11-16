@@ -3,8 +3,8 @@
 #include "core.h"
 #include "ezgrpc2_message.h"
 
-EZGRPC2_API ezgrpc2_message_t *ezgrpc2_message_new(size_t data_len) {
-  ezgrpc2_message_t *message = malloc(sizeof(*message));
+EZGRPC2_API ezgrpc2_message *ezgrpc2_message_new(size_t data_len) {
+  ezgrpc2_message *message = malloc(sizeof(*message));
   assert(message != NULL);
   message->data = malloc(data_len);
   assert(message->data != NULL);
@@ -12,8 +12,8 @@ EZGRPC2_API ezgrpc2_message_t *ezgrpc2_message_new(size_t data_len) {
   return message;
 }
 
-EZGRPC2_API ezgrpc2_message_t *ezgrpc2_message_new2(void *data, size_t data_len) {
-  ezgrpc2_message_t *message = malloc(sizeof(*message));
+EZGRPC2_API ezgrpc2_message *ezgrpc2_message_new2(void *data, size_t data_len) {
+  ezgrpc2_message *message = malloc(sizeof(*message));
   assert(message != NULL);
   message->data = malloc(data_len);
   assert(message->data != NULL);
@@ -22,7 +22,7 @@ EZGRPC2_API ezgrpc2_message_t *ezgrpc2_message_new2(void *data, size_t data_len)
   return message;
 }
 
-EZGRPC2_API void ezgrpc2_message_free(ezgrpc2_message_t *message) {
+EZGRPC2_API void ezgrpc2_message_free(ezgrpc2_message *message) {
   free(message->data);
   free(message);
 }

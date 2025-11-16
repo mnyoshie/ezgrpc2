@@ -9,16 +9,16 @@
 #define ezlog(...) (void)0
 
 
-extern ezgrpc2_session_info_t *session_info_new(void *);
+extern ezgrpc2_session_info *session_info_new(void *);
 
-EZGRPC2_API ezgrpc2_list_t *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server_t *server) {
-  ezgrpc2_list_t *lsession_info = ezgrpc2_list_new(NULL);
+EZGRPC2_API ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server) {
+  ezgrpc2_list *lsession_info = ezgrpc2_list_new(NULL);
   assert(lsession_info != NULL);
 
   for (EZNFDS i = 2; i < server->nb_fds; i++) {
     if (server->fds[i].fd == -1)
       continue;
-    ezgrpc2_session_info_t *session_info = session_info_new(NULL);
+    ezgrpc2_session_info *session_info = session_info_new(NULL);
     ezgrpc2_list_push_back(lsession_info, session_info);
   }
 
@@ -29,20 +29,20 @@ EZGRPC2_API ezgrpc2_list_t *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server_
 
 }
 
-EZGRPC2_API ezgrpc2_session_info_t *ezgrpc2_server_get_session_info(ezgrpc2_server_t *server, ezgrpc2_session_uuid_t *session_uuid) {
+EZGRPC2_API ezgrpc2_session_info *ezgrpc2_server_get_session_info(ezgrpc2_server *server, ezgrpc2_session_uuid *session_uuid) {
 
   return NULL;
 }
 
-EZGRPC2_API ezgrpc2_server_t *ezgrpc2_server_new(
+EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
   const char *ipv4_addr, u16 ipv4_port,
   const char *ipv6_addr, u16 ipv6_port,
   int backlog,
-  ezgrpc2_server_settings_t *server_settings,
-  ezgrpc2_http2_settings_t *http2_settings) {
+  ezgrpc2_server_settings *server_settings,
+  ezgrpc2_http2_settings *http2_settings) {
   struct sockaddr_in ipv4_saddr = {0};
   struct sockaddr_in6 ipv6_saddr = {0};
-  ezgrpc2_server_t *server = NULL;
+  ezgrpc2_server *server = NULL;
   EZSOCKET ipv4_sockfd = EZINVALID_SOCKET;
   EZSOCKET ipv6_sockfd = EZINVALID_SOCKET;
 
@@ -71,20 +71,20 @@ EZGRPC2_API ezgrpc2_server_t *ezgrpc2_server_new(
   }
 
   if (server_settings == NULL) {
-    ezgrpc2_server_settings_t *server_settings_ = ezgrpc2_server_settings_new(NULL);
+    ezgrpc2_server_settings *server_settings_ = ezgrpc2_server_settings_new(NULL);
     assert(server_settings_ != NULL);
-    memcpy(&server->server_settings, server_settings_, sizeof(ezgrpc2_server_settings_t));
+    memcpy(&server->server_settings, server_settings_, sizeof(ezgrpc2_server_settings));
     ezgrpc2_server_settings_free(server_settings_);
   } else {
-    memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings_t));
+    memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings));
   }
 
   if (http2_settings == NULL) {
-    ezgrpc2_http2_settings_t *http2_settings_= ezgrpc2_http2_settings_new(NULL);
-    memcpy(&server->http2_settings, http2_settings_, sizeof(ezgrpc2_http2_settings_t));
+    ezgrpc2_http2_settings *http2_settings_= ezgrpc2_http2_settings_new(NULL);
+    memcpy(&server->http2_settings, http2_settings_, sizeof(ezgrpc2_http2_settings));
     ezgrpc2_http2_settings_free(http2_settings_);
   } else {
-    memcpy(&server->http2_settings, http2_settings, sizeof(ezgrpc2_http2_settings_t));
+    memcpy(&server->http2_settings, http2_settings, sizeof(ezgrpc2_http2_settings));
   }
 
   /* shutdown fd + ipv4 fd listener + ipv6 fd listener */
@@ -123,9 +123,12 @@ EZGRPC2_API ezgrpc2_server_t *ezgrpc2_server_new(
       goto err;
     }
 
-    if (makenonblock(ipv4_sockfd)) assert(0);  // TODO
+    if (makenonblock(ipv4_sockfd)) {
+      EZGRPC2_LOG_ERROR(server, "makenonblock failed\n");
+      goto err;
+    }
 
-    ezlog("listening on ipv4 %s:%d ...\n", server->ipv4_addr,
+    EZGRPC2_LOG_NORMAL(server, "listening on ipv4 %s:%d ...\n", server->ipv4_addr,
           server->ipv4_port);
   }
 
@@ -165,9 +168,12 @@ EZGRPC2_API ezgrpc2_server_t *ezgrpc2_server_new(
       goto err;
     }
 
-    if (makenonblock(ipv6_sockfd)) assert(0);  // TODO
+    if (makenonblock(ipv6_sockfd)) {
+      EZGRPC2_LOG_ERROR(server, "makenonblock failed\n");
+      goto err;
+    }
 
-    ezlog("listening on ipv6 [%s]:%d ...\n", server->ipv6_addr,
+    EZGRPC2_LOG_NORMAL(server, "listening on ipv6 [%s]:%d ...\n", server->ipv6_addr,
           server->ipv6_port);
   }
 
@@ -194,6 +200,7 @@ EZGRPC2_API ezgrpc2_server_t *ezgrpc2_server_new(
   return server;
 
 err:
+  thpool_free(&server->logger_thread);
   ezgrpc2_server_free(server);
   return NULL;
 }
@@ -208,9 +215,9 @@ err:
 
 
 EZGRPC2_API int ezgrpc2_server_poll(
-  ezgrpc2_server_t *server,
-  ezgrpc2_list_t *levents,
-  ezgrpc2_path_t *paths,
+  ezgrpc2_server *server,
+  ezgrpc2_list *levents,
+  ezgrpc2_path *paths,
   size_t nb_paths,
   int timeout) {
   assert(levents != NULL);
@@ -265,7 +272,7 @@ EZGRPC2_API int ezgrpc2_server_poll(
 
 
 EZGRPC2_API void ezgrpc2_server_free(
-  ezgrpc2_server_t *ezserver) {
+  ezgrpc2_server *ezserver) {
   if (ezserver == NULL)
     return;
   for (EZNFDS i = 0; i < 2; i++)
@@ -320,7 +327,7 @@ static void logger(void *userdata) {
   log_free(l);
 }
 
-void ezgrpc2_server_log(ezgrpc2_server_t *server, uint32_t log_level, char *fmt, ...){
+void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level, char *fmt, ...){
   if (!(log_level & EZGRPC2_SERVER_LOG_NORMAL || log_level & server->server_settings.logging_level))
     return;
   va_list ap;

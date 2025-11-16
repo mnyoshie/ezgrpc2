@@ -1,4 +1,7 @@
 
+all :
+	$(MAKE) -C src
+	$(MAKE) -C examples
 
 help:
 	@echo "Available targets:"
@@ -7,11 +10,6 @@ help:
 	@echo ""
 	@echo "  make D=1 all        enables -ggdb3 and server debug logs for development"
 	@echo "  make T=1 all        enables server trace logs for development (may provide heavy overheads)"
-
-
-all :
-	$(MAKE) -C src
-	$(MAKE) -C examples
 
 clean :
 	$(MAKE) -C src clean

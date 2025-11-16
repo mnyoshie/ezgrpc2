@@ -1,7 +1,6 @@
 #ifndef EZGRPC2_GRPC_STATUS_H
 #define EZGRPC2_GRPC_STATUS_H
 
-typedef enum ezgrpc2_grpc_status_t ezgrpc2_grpc_status_t;
 /**
  * Types of trailer status codes
  */
@@ -25,6 +24,7 @@ enum ezgrpc2_grpc_status_t {
   EZGRPC2_GRPC_STATUS_UNAUTHENTICATED = 16,
   EZGRPC2_GRPC_STATUS_NULL = -1
 };
+typedef enum ezgrpc2_grpc_status_t ezgrpc2_grpc_status_t;
 
 char *ezgrpc2_grpc_status_strstatus(ezgrpc2_grpc_status_t status);
 

@@ -2,7 +2,7 @@ CC ?= gcc
 AR ?= ar
 CXX ?= g++
 
-CFLAGS += -Wall
+CFLAGS += -Wall -std=c23 -pedantic
 EXTRACFLAGS ?=
 
 ifeq ($(D),1)

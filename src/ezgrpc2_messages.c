@@ -7,8 +7,8 @@
 #  include <arpa/inet.h>
 #endif
 
-typedef struct ezgrpc2_messages_t ezgrpc2_messages_t;
-struct ezgrpc2_messages_t {
+typedef struct ezgrpc2_messages ezgrpc2_messages;
+struct ezgrpc2_messages {
   u8 *data;
   size_t data_len;
   size_t nb_messages;
@@ -38,31 +38,31 @@ static size_t is_valid_length_prefixed_messages(void *data, size_t len, size_t *
 }
 
 /* NOTE: expect message->data is unaligned. */
-ezgrpc2_message_t ezgrpc2_messages_peek(ezgrpc2_messages_t *messages) {
+ezgrpc2_message ezgrpc2_messages_peek(ezgrpc2_messages *messages) {
   if (messages->seek == messages->data_len)
-    return (ezgrpc2_message_t) {
+    return (ezgrpc2_message) {
       .is_compressed = 0,
       .len = 0,
       .data = NULL
     };
-  return (ezgrpc2_message_t){
+  return (ezgrpc2_message){
     .is_compressed = messages->data[messages->seek],
     .len = htonl(uread_u32(messages->data + messages->seek + 1)),
     .data = messages->data + messages->seek + 4
   };
 }
 
-void ezgrpc2_messages_rewind(ezgrpc2_messages_t *messages) {
+void ezgrpc2_messages_rewind(ezgrpc2_messages *messages) {
   messages->seek = 0;
 }
 
-size_t ezgrpc2_messages_count(ezgrpc2_messages_t *messages) {
+size_t ezgrpc2_messages_count(ezgrpc2_messages *messages) {
   return messages->nb_messages;
 }
 
-ezgrpc2_message_t ezgrpc2_messages_next(ezgrpc2_messages_t *messages) {
+ezgrpc2_message ezgrpc2_messages_next(ezgrpc2_messages *messages) {
   if (messages->seek == messages->data_len)
-    return (ezgrpc2_message_t) {
+    return (ezgrpc2_message) {
       .is_compressed = 0,
       .len = 0,
       .data = NULL
@@ -73,18 +73,18 @@ ezgrpc2_message_t ezgrpc2_messages_next(ezgrpc2_messages_t *messages) {
   size_t pseek = messages->seek;
 
 
-  return messages->seek += len, (ezgrpc2_message_t){
+  return messages->seek += len, (ezgrpc2_message){
     .is_compressed = is_compressed,
     .len = len,
     .data = messages->data + pseek 
   };
 }
 
-ezgrpc2_messages_t *ezgrpc2_messages_new(void *data, size_t len){
+ezgrpc2_messages *ezgrpc2_messages_new(void *data, size_t len){
   size_t nb_messages = 0;  
   if (!is_valid_length_prefixed_messages(data, len, &nb_messages))
     return NULL;
-  ezgrpc2_messages_t *messages = malloc(sizeof(*messages));
+  ezgrpc2_messages *messages = malloc(sizeof(*messages));
   messages->data_len = len;
   messages->data = data;
   messages->seek = 0;

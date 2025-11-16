@@ -11,7 +11,7 @@ looping the following, much like so in a game:
 
   * render
 
-.. autocenum:: ezgrpc2.h::ezgrpc2_status_t
+.. autocenum:: ezgrpc2.h::ezgrpc2_status
    :members:
        EZGRPC2_STATUS_OK,
        EZGRPC2_STATUS_CANCELLED,
@@ -30,23 +30,23 @@ looping the following, much like so in a game:
        EZGRPC2_STATUS_DATA_LOSS,
        EZGRPC2_STATUS_UNAUTHENTICATED,
        EZGRPC2_STATUS_NULL
-.. autocenum:: ezgrpc2.h::ezgrpc2_event_type_t
+.. autocenum:: ezgrpc2.h::ezgrpc2_event_type
    :members: EZGRPC2_EVENT_MESSAGE, EZGRPC2_EVENT_DATALOSS, EZGRPC2_EVENT_CANCEL
 
-.. autocstruct:: ezgrpc2.h::ezgrpc2_server_t
-.. autocstruct:: ezgrpc2.h::ezgrpc2_path_t
+.. autocstruct:: ezgrpc2.h::ezgrpc2_server
+.. autocstruct:: ezgrpc2.h::ezgrpc2_path
    :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_header_t
+.. autocstruct:: ezgrpc2.h::ezgrpc2_header
    :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_message_t
+.. autocstruct:: ezgrpc2.h::ezgrpc2_message
    :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event_t
+.. autocstruct:: ezgrpc2.h::ezgrpc2_event
    :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event_message_t
+.. autocstruct:: ezgrpc2.h::ezgrpc2_event_message
    :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event_dataloss_t
+.. autocstruct:: ezgrpc2.h::ezgrpc2_event_dataloss
    :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event_cancel_t
+.. autocstruct:: ezgrpc2.h::ezgrpc2_event_cancel
    :members:
 
 

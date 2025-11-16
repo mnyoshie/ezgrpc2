@@ -8,22 +8,22 @@
  * An opaque list context. 
  *
  */
-typedef struct ezgrpc2_list_t ezgrpc2_list_t;
+typedef struct ezgrpc2_list ezgrpc2_list;
 
 /**
  *   Create a new list.
  *
  */
-ezgrpc2_list_t *ezgrpc2_list_new(void *unused);
+ezgrpc2_list *ezgrpc2_list_new(void *unused);
 
-void ezgrpc2_list_free(ezgrpc2_list_t *list);
+void ezgrpc2_list_free(ezgrpc2_list *list);
 
 
 /**
  *   Counts the number of elements at the address pointed by the parameter ``list``
  *
  */
-size_t ezgrpc2_list_count(ezgrpc2_list_t *list);
+size_t ezgrpc2_list_count(ezgrpc2_list *list);
 
 /**
  * Pushes the user defined ``userdata`` to the front of the list ``list``
@@ -34,7 +34,7 @@ size_t ezgrpc2_list_count(ezgrpc2_list_t *list);
  *
  *           * On failure, non-zero
  */
-int ezgrpc2_list_push_back(ezgrpc2_list_t *list, void *userdata);
+int ezgrpc2_list_push_back(ezgrpc2_list *list, void *userdata);
 
 /**
  * Pushes the user defined ``userdata`` to the back of the list ``list``
@@ -45,7 +45,7 @@ int ezgrpc2_list_push_back(ezgrpc2_list_t *list, void *userdata);
  *
  *           * On failure, non-zero
  */
-int ezgrpc2_list_push_front(ezgrpc2_list_t *list, void *userdata);
+int ezgrpc2_list_push_front(ezgrpc2_list *list, void *userdata);
 
 /**
  * Removes the user defined data from the last element in
@@ -57,9 +57,9 @@ int ezgrpc2_list_push_front(ezgrpc2_list_t *list, void *userdata);
  *
  *           * On an empty list, ``NULL``.
  */
-void *ezgrpc2_list_pop_front(ezgrpc2_list_t *list);
+void *ezgrpc2_list_pop_front(ezgrpc2_list *list);
 
-void *ezgrpc2_list_pop_back(ezgrpc2_list_t *list);
+void *ezgrpc2_list_pop_back(ezgrpc2_list *list);
 
 /**
  * Peeks from the back of the list, ``list``.
@@ -70,7 +70,7 @@ void *ezgrpc2_list_pop_back(ezgrpc2_list_t *list);
  *
  *           * On an empty list, ``NULL``.
  */
-void *ezgrpc2_list_peek_front(ezgrpc2_list_t *list);
+void *ezgrpc2_list_peek_front(ezgrpc2_list *list);
 
 
 /**
@@ -79,7 +79,7 @@ void *ezgrpc2_list_peek_front(ezgrpc2_list_t *list);
  * :param dst: The destination list
  * :param src: The source list
  */
-void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list_t *dst, ezgrpc2_list_t *src);
+void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list *dst, ezgrpc2_list *src);
 
 
 /**
@@ -107,7 +107,7 @@ void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list_t *dst, ezgrpc2_list_t *src)
  *    }
  *    
  *    int main() {
- *      ezgrpc2_list_t l;
+ *      ezgrpc2_list l;
  *      ezgrpc2_list_init(&l);
  *      ezgrpc2_list_push_front(&l, (void*)0x1);
  *      ezgrpc2_list_push_front(&l, (void*)0x4);
@@ -118,7 +118,7 @@ void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list_t *dst, ezgrpc2_list_t *src)
  *      return 0;
  *    }
  */
-void *ezgrpc2_list_find(ezgrpc2_list_t *list, int (*cmp)(const void *data, const void *userdata), void *userdata);
+void *ezgrpc2_list_find(ezgrpc2_list *list, int (*cmp)(const void *data, const void *userdata), void *userdata);
 
 /**
  * The :c:func:`ezgrpc2_list_remove()` function removes and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
@@ -146,7 +146,7 @@ void *ezgrpc2_list_find(ezgrpc2_list_t *list, int (*cmp)(const void *data, const
  *    }
  *    
  *    int main() {
- *      ezgrpc2_list_t l;
+ *      ezgrpc2_list l;
  *      ezgrpc2_list_init(&l);
  *      ezgrpc2_list_push_front(&l, (void*)0x1);
  *      ezgrpc2_list_push_front(&l, (void*)0x4);
@@ -157,7 +157,7 @@ void *ezgrpc2_list_find(ezgrpc2_list_t *list, int (*cmp)(const void *data, const
  *      return 0;
  *    }
  */
-void *ezgrpc2_list_remove(ezgrpc2_list_t *list, int (*cmp)(const void *data, const void *userdata), void *userdata);
+void *ezgrpc2_list_remove(ezgrpc2_list *list, int (*cmp)(const void *data, const void *userdata), void *userdata);
 
 /**
  * Checks if the list is empty.
@@ -166,8 +166,8 @@ void *ezgrpc2_list_remove(ezgrpc2_list_t *list, int (*cmp)(const void *data, con
  *
  *           * Else, 0
  */
-int ezgrpc2_list_is_empty(ezgrpc2_list_t *list);
+int ezgrpc2_list_is_empty(ezgrpc2_list *list);
 
 
-void ezgrpc2_list_foreach(ezgrpc2_list_t *list, void (*func)(const void *data, const void *userdata), void *userdata);
+void ezgrpc2_list_foreach(ezgrpc2_list *list, void (*func)(const void *data, const void *userdata), void *userdata);
 #endif

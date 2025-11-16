@@ -7,10 +7,10 @@
 #include <time.h>
 #include "ezgrpc2_list.h"
 
-typedef struct thpool_t thpool_t;
-struct thpool_t;
+typedef struct thpool thpool;
+struct thpool;
 
-int thpool_init(thpool_t *pool, int workers, int flags);
+int thpool_init(thpool *pool, int workers, int flags);
 
 /**
  * Adds task to the thread pool.
@@ -61,7 +61,7 @@ int thpool_init(thpool_t *pool, int workers, int flags);
  *    void *callback(void *data){return  NULL};
  *
  *    int main() {
- *      thpool_t *pool = thpool_new(4, 0);
+ *      thpool *pool = thpool_new(4, 0);
  *
  *      //free(NULL) has no effect
  *      thpool_add_task(pool, callback, NULL, free, free);
@@ -88,7 +88,7 @@ int thpool_init(thpool_t *pool, int workers, int flags);
  *    void *callback(void *data){return  malloc(32);};
  *
  *    int main() {
- *      thpool_t *pool = thpool_new(4, 0);
+ *      thpool *pool = thpool_new(4, 0);
  *      for (int  i = 0; i < 5; i++)
  *        thpool_add_task(pool, callback, malloc(i), ret_cleanup, userdata_cleanup);
  *      sleep(1);
@@ -110,7 +110,7 @@ int thpool_init(thpool_t *pool, int workers, int flags);
  *    called ret_cleanup
  *     
  */
-int thpool_add_task(thpool_t *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*));
+int thpool_add_task(thpool *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*));
 
 
 /**
@@ -126,7 +126,7 @@ int thpool_add_task(thpool_t *pool, void (*func)(void*), void *userdata, void (*
  * if setted, is called with the argument ``userdata`` and ``ret``, respectively.
  *
  */
-void thpool_free(thpool_t *pool);
+void thpool_free(thpool *pool);
 
 
 /**
@@ -137,9 +137,9 @@ void thpool_free(thpool_t *pool);
  *
  *           If not empty, ``0``
  */
-int thpool_is_empty(thpool_t *pool);
+int thpool_is_empty(thpool *pool);
 
-void thpool_stop_and_join(thpool_t *pool);
+void thpool_stop_and_join(thpool *pool);
 
 
 

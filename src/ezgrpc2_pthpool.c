@@ -16,16 +16,16 @@ typedef struct ezgrpc2_pthpool_result_t task_t;
     }                                                                          \
   } while (0)
 
-struct ezgrpc2_pthpool_t {
+struct ezgrpc2_pthpool {
   size_t max_queue, max_finished;
 
 #ifdef NO_COUNT
   size_t nb_finished, nb_queue;
 #endif
   // task queue
-  ezgrpc2_list_t *queue;
+  ezgrpc2_list *queue;
   // finished task queue
-  ezgrpc2_list_t *finished;
+  ezgrpc2_list *finished;
 
   int nb_threads;
   pthread_t *threads;
@@ -40,7 +40,7 @@ struct ezgrpc2_pthpool_t {
 
 
 static void *worker(void *arg) {
-  ezgrpc2_pthpool_t *pool = arg;
+  ezgrpc2_pthpool *pool = arg;
 
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->live++;
@@ -83,8 +83,8 @@ static void *worker(void *arg) {
   return NULL;
 }
 
-EZGRPC2_API ezgrpc2_pthpool_t *ezgrpc2_pthpool_new(int workers, int flags) {
-  ezgrpc2_pthpool_t *pool = malloc(sizeof(*pool));
+EZGRPC2_API ezgrpc2_pthpool *ezgrpc2_pthpool_new(int workers, int flags) {
+  ezgrpc2_pthpool *pool = malloc(sizeof(*pool));
   pthread_mutex_init(&pool->mutex, NULL);
   pthread_cond_init(&pool->wcond, NULL);
 
@@ -112,7 +112,7 @@ EZGRPC2_API ezgrpc2_pthpool_t *ezgrpc2_pthpool_new(int workers, int flags) {
   return pool;
 }
 
-EZGRPC2_API int ezgrpc2_pthpool_is_empty(ezgrpc2_pthpool_t *pool) {
+EZGRPC2_API int ezgrpc2_pthpool_is_empty(ezgrpc2_pthpool *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int ret = pool->running == 0 &&
     ezgrpc2_list_peek_front(pool->finished) == NULL &&
@@ -122,11 +122,11 @@ EZGRPC2_API int ezgrpc2_pthpool_is_empty(ezgrpc2_pthpool_t *pool) {
   return ret;
 }
 
-EZGRPC2_API int ezgrpc2_pthpool_add_task(ezgrpc2_pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*)) {
+EZGRPC2_API int ezgrpc2_pthpool_add_task(ezgrpc2_pthpool *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*)) {
   return ezgrpc2_pthpool_add_task2(pool, func, userdata, ret_cleanup, userdata_cleanup, 0);
 }
 
-EZGRPC2_API int ezgrpc2_pthpool_add_task2(ezgrpc2_pthpool_t *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout) {
+EZGRPC2_API int ezgrpc2_pthpool_add_task2(ezgrpc2_pthpool *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int c = 0;
 
@@ -174,7 +174,7 @@ unlock:
 /* checks if there's any finished tasks in the pool.
  * returns immediately
  */
-EZGRPC2_API void ezgrpc2_pthpool_poll(ezgrpc2_pthpool_t *pool, ezgrpc2_list_t *l) {
+EZGRPC2_API void ezgrpc2_pthpool_poll(ezgrpc2_pthpool *pool, ezgrpc2_list *l) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
 
   //*l = pool->finished;
@@ -183,7 +183,7 @@ EZGRPC2_API void ezgrpc2_pthpool_poll(ezgrpc2_pthpool_t *pool, ezgrpc2_list_t *l
   force_assert(!pthread_mutex_unlock(&pool->mutex));
 }
 
-EZGRPC2_API void ezgrpc2_pthpool_stop_and_join(ezgrpc2_pthpool_t *pool) {
+EZGRPC2_API void ezgrpc2_pthpool_stop_and_join(ezgrpc2_pthpool *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
@@ -196,7 +196,7 @@ EZGRPC2_API void ezgrpc2_pthpool_result_free(ezgrpc2_pthpool_result_t *result) {
   free(result);
 }
 
-EZGRPC2_API void ezgrpc2_pthpool_free(ezgrpc2_pthpool_t *pool) {
+EZGRPC2_API void ezgrpc2_pthpool_free(ezgrpc2_pthpool *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
@@ -227,9 +227,9 @@ static void *task(void *data) {
 }
 
 int main() {
-  ezgrpc2_pthpool_t *pthpool = ezgrpc2_pthpool_new(4, -1);
+  ezgrpc2_pthpool *pthpool = ezgrpc2_pthpool_new(4, -1);
 
-  ezgrpc2_list_t *finished = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *finished = ezgrpc2_list_new(NULL);
   for (int i = 0; i < 100; i++) {
     ezgrpc2_pthpool_add_task(pthpool, task, malloc(32), free, free);
     ezgrpc2_pthpool_poll(pthpool, finished);
@@ -243,7 +243,7 @@ int main() {
   }
 
   ezgrpc2_pthpool_free(pthpool);
-  ezgrpc2_list_t *l = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *l = ezgrpc2_list_new(NULL);
   ezgrpc2_list_push_back(l, (void*)0x123);
   ezgrpc2_list_push_back(l, (void*)0x13);
   ezgrpc2_list_push_back(l, (void*)0x23);

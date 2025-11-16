@@ -83,16 +83,19 @@ static char *strndup(char *c, size_t n) {
 //
 
 
-typedef struct ezgrpc2_stream_t ezgrpc2_stream_t;
-struct ezgrpc2_stream_t {
+#ifndef EZGRPC2_STREAM_MAX_HEADERS
+#define EZGRPC2_STREAM_MAX_HEADERS 32
+#endif
+typedef struct ezgrpc2_stream ezgrpc2_stream;
+struct ezgrpc2_stream {
   i32 stream_id;
 
   /* the time the stream is received by the server in
    * unix epoch */
   u64 time;
   size_t nb_headers;
-  ezgrpc2_header_t *headers;
-  ezgrpc2_list_t *lheaders;
+  ezgrpc2_header headers[EZGRPC2_STREAM_MAX_HEADERS];
+  //ezgrpc2_list *lheaders;
 
   bool is_method_post : 1;
   bool is_scheme_http : 1;
@@ -101,9 +104,14 @@ struct ezgrpc2_stream_t {
   /* just a bool. if content type is application/grpc* */
   bool is_content_grpc : 1;
 
+  char *hcontent_type;
+  char *hgrpc_encoding;
+  char *hgrpc_accept_encoding;
+  char *htimeout;
+
 
   /* stores `:path` */
-  ezgrpc2_path_t *path;
+  ezgrpc2_path *path;
   size_t path_index;
 
   /* recv_data */
@@ -112,11 +120,11 @@ struct ezgrpc2_stream_t {
 
   bool is_trunc : 1;
   size_t trunc_seek;
-  ezgrpc2_list_t *lqueue_omessages;
+  ezgrpc2_list *lqueue_omessages;
 };
 
-typedef struct ezgrpc2_session_t ezgrpc2_session_t;
-struct ezgrpc2_session_t {
+typedef struct ezgrpc2_session ezgrpc2_session;
+struct ezgrpc2_session {
   nghttp2_session *ngsession;
 #ifdef _WIN32
   UUID session_uuid;
@@ -128,7 +136,7 @@ struct ezgrpc2_session_t {
   socklen_t socklen;
 #endif
   /* parent server context */
-  ezgrpc2_server_t *server;
+  ezgrpc2_server *server;
 
 
   struct sockaddr_storage sockaddr;
@@ -141,27 +149,27 @@ struct ezgrpc2_session_t {
   u16 *server_port;
 
   size_t nb_paths;
-  ezgrpc2_path_t *paths;
+  ezgrpc2_path *paths;
 
 
   /* settings requested by the client. to be set when a SETTINGS
    * frame is received.
    */
-  ezgrpc2_http2_settings_t client_http2_settings;
+  ezgrpc2_http2_settings client_http2_settings;
 
   //size_t nb_open_streams;
   /* the streams in a linked lists. allocated when we are
    * about to receive a HEADERS frame */
-  ezgrpc2_list_t *lstreams;
+  ezgrpc2_list *lstreams;
   size_t nb_streams;
 };
 
-struct ezgrpc2_server_t {
+struct ezgrpc2_server {
   nghttp2_session *ngsession;
-  ezgrpc2_server_settings_t server_settings;
-  ezgrpc2_http2_settings_t http2_settings;
-  thpool_t logger_thread;
-  ezgrpc2_list_t *levents;
+  ezgrpc2_server_settings server_settings;
+  ezgrpc2_http2_settings http2_settings;
+  thpool logger_thread;
+  ezgrpc2_list *levents;
 
   u16 ipv4_port;
   u16 ipv6_port;
@@ -183,7 +191,7 @@ struct ezgrpc2_server_t {
   struct pollfd *fds;
 
   size_t nb_sessions;
-  ezgrpc2_session_t *sessions;
+  ezgrpc2_session *sessions;
 };
 
 #endif

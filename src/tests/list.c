@@ -9,14 +9,14 @@ void tearDown(void) {
 }
 
 void test_list_creation() {
-  ezgrpc2_list_t *list = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *list = ezgrpc2_list_new(NULL);
   TEST_ASSERT_NOT_NULL(list);
   TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)ezgrpc2_list_count(list));
   ezgrpc2_list_free(list);
 }
 
 void test_list_push_and_pop_back_1() {
-  ezgrpc2_list_t *list = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *list = ezgrpc2_list_new(NULL);
   TEST_ASSERT_NOT_NULL(list);
   TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)ezgrpc2_list_count(list));
   ezgrpc2_list_push_back(list, "Alpha");
@@ -27,7 +27,7 @@ void test_list_push_and_pop_back_1() {
 }
 
 void test_list_push_and_pop_back_2() {
-  ezgrpc2_list_t *list = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *list = ezgrpc2_list_new(NULL);
   TEST_ASSERT_NOT_NULL(list);
   TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)ezgrpc2_list_count(list));
   ezgrpc2_list_push_back(list, "Alpha");
@@ -42,7 +42,7 @@ void test_list_push_and_pop_back_2() {
 }
 
 void test_list_push_and_pop_front_1() {
-  ezgrpc2_list_t *list = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *list = ezgrpc2_list_new(NULL);
   TEST_ASSERT_NOT_NULL(list);
   TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)ezgrpc2_list_count(list));
   ezgrpc2_list_push_front(list, "Alpha");
@@ -53,7 +53,7 @@ void test_list_push_and_pop_front_1() {
 }
 
 void test_list_push_and_pop_front_2() {
-  ezgrpc2_list_t *list = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *list = ezgrpc2_list_new(NULL);
   TEST_ASSERT_NOT_NULL(list);
   TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)ezgrpc2_list_count(list));
   ezgrpc2_list_push_front(list, "Alpha");
@@ -73,7 +73,7 @@ void test_list_concat() {
 
 
 void test_list_random() {
-  ezgrpc2_list_t *list = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *list = ezgrpc2_list_new(NULL);
   TEST_ASSERT_NOT_NULL(list);
   TEST_ASSERT_NULL(ezgrpc2_list_pop_back(list));
   TEST_ASSERT_NULL(ezgrpc2_list_pop_front(list));

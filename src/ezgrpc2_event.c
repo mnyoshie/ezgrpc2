@@ -2,10 +2,10 @@
 #include "core.h"
 #include "ezgrpc2_session.h"
 
-ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *session_uuid, ...) {
+ezgrpc2_event *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid *session_uuid, ...) {
   va_list ap;
   va_start(ap, session_uuid);
-  ezgrpc2_event_t *event = malloc(sizeof(*event));
+  ezgrpc2_event *event = malloc(sizeof(*event));
   event->type = type;
   event->session_uuid = session_uuid;
   switch (type) {
@@ -25,13 +25,13 @@ ezgrpc2_event_t *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid_t *se
   return event;
 }
 
-EZGRPC2_API void ezgrpc2_event_free(ezgrpc2_event_t *event) {
+EZGRPC2_API void ezgrpc2_event_free(ezgrpc2_event *event) {
   if (event == NULL) return;
 
   ezgrpc2_session_uuid_free(event->session_uuid);
   switch (event->type) {
   case EZGRPC2_EVENT_MESSAGE: {
-    ezgrpc2_message_t *message;
+    ezgrpc2_message *message;
     if (event->message.lmessages != NULL)
       while ((message = ezgrpc2_list_pop_front(event->message.lmessages)) !=
              NULL) {

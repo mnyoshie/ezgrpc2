@@ -9,19 +9,19 @@ int makenonblock(SOCKET sockfd);
 int makenonblock(int sockfd);
 #endif
 
-int session_add(ezgrpc2_server_t *ezserver, ezgrpc2_list_t *levents, int listenfd);
-int session_events(ezgrpc2_session_t *ezsession);
-void session_free(ezgrpc2_session_t *ezsession);
-ezgrpc2_session_t *session_find(ezgrpc2_session_t *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid_t *session_uuid);
+int session_add(ezgrpc2_server *ezserver, ezgrpc2_list *levents, int listenfd);
+int session_events(ezgrpc2_session *ezsession);
+void session_free(ezgrpc2_session *ezsession);
+ezgrpc2_session *session_find(ezgrpc2_session *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid *session_uuid);
 int session_create(
-    ezgrpc2_session_t *ezsession,
+    ezgrpc2_session *ezsession,
     EZSOCKET sockfd,
     struct sockaddr_storage *sockaddr,
     EZSOCKLEN socklen,
-    ezgrpc2_server_t *server);
+    ezgrpc2_server *server);
 
-void stream_free(ezgrpc2_stream_t *stream);
-ezgrpc2_stream_t *stream_new(i32 stream_id);
+void stream_free(ezgrpc2_stream *stream);
+ezgrpc2_stream *stream_new(i32 stream_id);
 
 int list_cmp_ezheader_name(const void *data, const void *userdata);
 void ezlog(char *fmt, ...);

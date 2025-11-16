@@ -79,114 +79,17 @@
 
 
 
-
-/* returns a value where a whole valid message is found
- * f the return value equals vec.len, then the message
- * is complete and not truncated.
- */
-size_t count_grpc_message(void *data, size_t len, int *nb_message) {
-  i8 *wire = (i8 *)data;
-  size_t seek, last_seek = 0;
-  for (seek = 0; seek < len; ) {
-    /* compressed flag */
-    seek += 1;
-
-//    if (seek + 4 > len) {
-//      atlog(
-//          COLSTR(
-//              "(1) prefixed-length messages overflowed. seeked %zu. len %zu\n",
-//              BHYEL),
-//          seek, len);
-//      return last_seek;
-//    }
-    /* message length */
-    u32 msg_len = ntohl(uread_u32(wire + seek));
-    /* 4 bytes message lengtb */
-    seek += sizeof(u32);
-
-    seek += msg_len;
-
-    if (seek <= len)
-      last_seek = seek;
-  }
-
-  ezlog("lseek %zu len %zu\n", last_seek, len);
-
-  if (seek > len) {
-    atlog(COLSTR("(2) prefixed-length messages overflowed\n", BHYEL));
-  }
-
-  if (seek < len) {
-    atlog(COLSTR("prefixed-length messages underflowed\n", BHYEL));
-  }
-
-  return last_seek;
-}
-
-
-
-/* clang-format off */
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* THIS IS INTENTIONALLY LEFT BLANK */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*------------------------------------------------------.
-| API FUNCTIONS: You will only have to care about these |
-`------------------------------------------------------*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 EZGRPC2_API int ezgrpc2_server_session_stream_send(
-  ezgrpc2_server_t *ezserver,
-  ezgrpc2_session_uuid_t *session_uuid,
+  ezgrpc2_server *ezserver,
+  ezgrpc2_session_uuid *session_uuid,
   i32 stream_id,
-  ezgrpc2_list_t *lmessages) {
+  ezgrpc2_list *lmessages) {
   int res;
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     return 1;
   }
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
+  ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
   if (ezstream == NULL) {
     /* stream doesn't exists */
     return 2;
@@ -222,16 +125,16 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send(
 
 
 EZGRPC2_API int ezgrpc2_server_session_stream_end(
-  ezgrpc2_server_t *ezserver,
-  ezgrpc2_session_uuid_t *session_uuid,
+  ezgrpc2_server *ezserver,
+  ezgrpc2_session_uuid *session_uuid,
   i32 stream_id,
   int status) {
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     return 1;
   }
 
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
+  ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
   if (ezstream == NULL)
     return 2;
 
@@ -263,11 +166,11 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end(
 
 
 EZGRPC2_API int ezgrpc2_server_session_end(
-  ezgrpc2_server_t *ezserver,
-  ezgrpc2_session_uuid_t *session_uuid,
+  ezgrpc2_server *ezserver,
+  ezgrpc2_session_uuid *session_uuid,
   i32 last_stream_id,
   int error_code) {
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == NULL) {
     /* session doesn't exists */
     return 1;
@@ -278,28 +181,28 @@ EZGRPC2_API int ezgrpc2_server_session_end(
   return 0;
 }
 
-EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
-  ezgrpc2_server_t *ezserver,
-  ezgrpc2_session_uuid_t *session_uuid,
-  i32 stream_id, ezgrpc2_header_t *ezheader) {
-  ezgrpc2_session_t *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
-  if (ezsession == NULL) {
-    return 1;
-  }
-
-  ezgrpc2_stream_t *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
-  if (ezstream == NULL)
-    return 2;
-
-  ezgrpc2_header_t *found;
-  if ((found = ezgrpc2_list_find(ezstream->lheaders, list_cmp_ezheader_name, ezheader))
-      == NULL)
-    return 3;
-
-  ezheader->value = found->value;
-  ezheader->valuelen = found->valuelen;
-  return 0;
-}
+//EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
+//  ezgrpc2_server *ezserver,
+//  ezgrpc2_session_uuid *session_uuid,
+//  i32 stream_id, ezgrpc2_header *ezheader) {
+//  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+//  if (ezsession == NULL) {
+//    return 1;
+//  }
+//
+//  ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
+//  if (ezstream == NULL)
+//    return 2;
+//
+//  ezgrpc2_header *found;
+//  if ((found = ezgrpc2_list_find(ezstream->lheaders, list_cmp_ezheader_name, ezheader))
+//      == NULL)
+//    return 3;
+//
+//  ezheader->value = found->value;
+//  ezheader->valuelen = found->valuelen;
+//  return 0;
+//}
 
 
 EZGRPC2_API const char *ezgrpc2_license(void){

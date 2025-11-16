@@ -3,8 +3,8 @@
 #include "common.h"
 #include "ezgrpc2_header.h"
 
-ezgrpc2_header_t *ezgrpc2_header_new(const u8 *name, size_t nlen, const u8 *value, size_t vlen) {
-  ezgrpc2_header_t *ezheader = malloc(sizeof(*ezheader));
+ezgrpc2_header *ezgrpc2_header_new(const u8 *name, size_t nlen, const u8 *value, size_t vlen) {
+  ezgrpc2_header *ezheader = malloc(sizeof(*ezheader));
   if (ezheader == NULL)
     return NULL;
 
@@ -19,7 +19,7 @@ ezgrpc2_header_t *ezgrpc2_header_new(const u8 *name, size_t nlen, const u8 *valu
   return ezheader;
 }
 
-void ezgrpc2_header_free(ezgrpc2_header_t *ezheader) {
+void ezgrpc2_header_free(ezgrpc2_header *ezheader) {
   free(ezheader->name);
   free(ezheader->value);
 }

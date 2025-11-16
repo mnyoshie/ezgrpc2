@@ -28,7 +28,7 @@ struct task_t {
 
 
 static void *worker(void *arg) {
-  thpool_t *pool = arg;
+  thpool *pool = arg;
 
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->live++;
@@ -58,8 +58,8 @@ static void *worker(void *arg) {
   return NULL;
 }
 
-thpool_t *thpool_new(int workers, int flags) {
-  thpool_t *pool = malloc(sizeof(*pool));
+thpool *thpool_new(int workers, int flags) {
+  thpool *pool = malloc(sizeof(*pool));
   pthread_mutex_init(&pool->mutex, NULL);
   pthread_cond_init(&pool->wcond, NULL);
 
@@ -81,7 +81,7 @@ thpool_t *thpool_new(int workers, int flags) {
   return pool;
 }
 
-int thpool_init(thpool_t *pool, int workers, int flags) {
+int thpool_init(thpool *pool, int workers, int flags) {
   pthread_mutex_init(&pool->mutex, NULL);
   pthread_cond_init(&pool->wcond, NULL);
 
@@ -103,7 +103,7 @@ int thpool_init(thpool_t *pool, int workers, int flags) {
   return 0;
 }
 
-int thpool_add_task(thpool_t *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*)) {
+int thpool_add_task(thpool *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*)) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int c = 0;
 
@@ -129,7 +129,7 @@ unlock:
   return c;
 }
 
-void thpool_stop_and_join(thpool_t *pool) {
+void thpool_stop_and_join(thpool *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
@@ -139,7 +139,7 @@ void thpool_stop_and_join(thpool_t *pool) {
 
 }
 
-void thpool_free(thpool_t *pool) {
+void thpool_free(thpool *pool) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));

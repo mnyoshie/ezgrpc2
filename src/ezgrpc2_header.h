@@ -40,19 +40,19 @@ struct ezgrpc2_grpc_response_headers_t {
 
 
 
-typedef struct ezgrpc2_header_t ezgrpc2_header_t;
+typedef struct ezgrpc2_header ezgrpc2_header;
 
 /**
  *
  */
-struct ezgrpc2_header_t {
+struct ezgrpc2_header {
   size_t namelen;
   char *name;
   size_t valuelen;
   char *value;
 };
 
-ezgrpc2_header_t *ezgrpc2_header_new(const u8 *name, size_t nlen, const u8 *value, size_t vlen);
+ezgrpc2_header *ezgrpc2_header_new(const u8 *name, size_t nlen, const u8 *value, size_t vlen);
 
-void ezgrpc2_header_free(ezgrpc2_header_t *ezheader);
+void ezgrpc2_header_free(ezgrpc2_header *ezheader);
 #endif

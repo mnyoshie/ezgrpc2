@@ -1,7 +1,5 @@
 # EZgRPC2
 
-A single threaded, non-blocking, asynchronous, gRPC server library in C.
-
 This library doesn't necessarily makes the implementation of gRPC server easier, in fact,
 it makes it harder.
 
@@ -21,15 +19,15 @@ gives events of `EVENT_CONNECT`, `EVENT_DISCONNECT`, `EVENT_MESSAGE`,
 `EVENT_DATALOSS` and `EVENT_CANCEL` to specific stream ids. In essence,
 you need process this event struct:
 ```c
-struct ezgrpc2_event_t {
+struct ezgrpc2_event {
 
-  ezgrpc2_session_uuid_t *session_uuid;
-  ezgrpc2_event_type_t type;
+  ezgrpc2_session_uuid *session_uuid;
+  ezgrpc2_even_type type;
 
   union {
-    ezgrpc2_event_message_t message;
-    ezgrpc2_event_dataloss_t dataloss;
-    ezgrpc2_event_cancel_t cancel;
+    ezgrpc2_event_message message;
+    ezgrpc2_event_dataloss dataloss;
+    ezgrpc2_event_cancel cancel;
   };
 };
 ```
@@ -59,21 +57,21 @@ using the library.
 
 Creating a server:
 ```c
-uint16_t port = 19009;
+uint16 port = 19009;
 int backlog = 16;
-ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, backlog, NULL, NULL);
+ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, backlog, NULL, NULL);
 ```
 
 Setting up service:
 ```c
 const int nb_paths = 1;
-ezgrpc2_path_t paths[nb_paths];
+ezgrpc2_path paths[nb_paths];
 paths[0].paths = "/test.yourAPI/whatever_service";
 ```
 
 Polling for events:
 ```c
-ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
+ezgrpc2_list *levents = ezgrpc2_list_new(NULL);
 int timeout = 10000;
 int res = ezgrpc2_server_poll(server, levents, paths, nb_paths, timeout);
 ```
@@ -81,12 +79,12 @@ int res = ezgrpc2_server_poll(server, levents, paths, nb_paths, timeout);
 Handle events:
 ```c
 if (res > 0) {
-  ezgrpc2_event_t *event;
+  ezgrpc2_event *event;
   while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     switch (event->type) {
     case EZGRPC2_EVENT_MESSAGE: {
       printf("event message on stream id %d\n", event->message.stream_id);
-      ezgrpc2_message_t *message;
+      ezgrpc2_message *message;
       while ((message = ezgrpc2_list_pop_front(event->message.lmessages)) != NULL) {
         printf("  message: compressed flag %d, len %zu, data %p\n", message->is_compressed, message->len, message->data);
         ezgrpc2_message_free(message);
@@ -117,11 +115,11 @@ this copy using `ezgrpc2_session_uuid_free()`.
 
 Creating a message:
 ```c
-ezgrpc2_message_t *message = ezgrpc2_message_new(11);
+ezgrpc2_message *message = ezgrpc2_message_new(11);
 message->is_compressed = 0;
 memcpy(message->data, "Hello mom!", 11);
 
-ezgrpc2_list_t *lmessages = ezgrpc2_list_new(NULL);
+ezgrpc2_list *lmessages = ezgrpc2_list_new(NULL);
 ezgrpc2_list_push_back(lmessages, message);
 ```
 

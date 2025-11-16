@@ -12,20 +12,20 @@
 
 struct path_userdata_t {
   char is_unary;
-  ezgrpc2_list_t *(*callback)(ezgrpc2_list_t *);
+  ezgrpc2_list *(*callback)(ezgrpc2_list *);
 };
 
 
-void free_lmessages(ezgrpc2_list_t *lmessages){
-  ezgrpc2_message_t *msg;
+void free_lmessages(ezgrpc2_list *lmessages){
+  ezgrpc2_message *msg;
   while ((msg = ezgrpc2_list_pop_front(lmessages)) != NULL) {
     ezgrpc2_message_free(msg);
   }
   ezgrpc2_list_free(lmessages);
 }
 
-void free_levents(ezgrpc2_list_t *levents) {
-  ezgrpc2_event_t *event;
+void free_levents(ezgrpc2_list *levents) {
+  ezgrpc2_event *event;
   while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     ezgrpc2_event_free(event);
   }
@@ -33,12 +33,12 @@ void free_levents(ezgrpc2_list_t *levents) {
 }
 
 _Atomic int pp = 0;
-ezgrpc2_list_t *callback_path0(ezgrpc2_list_t *lmessages){
-  ezgrpc2_list_t *lmessages_ret = ezgrpc2_list_new(NULL);
+ezgrpc2_list *callback_path0(ezgrpc2_list *lmessages){
+  ezgrpc2_list *lmessages_ret = ezgrpc2_list_new(NULL);
   /* if client did not request properly, skipp processing. */
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 2; i++, pp++) {
-    ezgrpc2_message_t *msg = ezgrpc2_message_new(11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(11);
     msg->is_compressed = 0;
     memcpy(msg->data, "    path0!", 11);
     *(uint32_t*)(msg->data) = pp;
@@ -48,10 +48,10 @@ ezgrpc2_list_t *callback_path0(ezgrpc2_list_t *lmessages){
 
   return lmessages_ret;
 }
-ezgrpc2_list_t *callback_path1(ezgrpc2_list_t *lmessages){
-  ezgrpc2_list_t *lmessages_ret = ezgrpc2_list_new(NULL);
+ezgrpc2_list *callback_path1(ezgrpc2_list *lmessages){
+  ezgrpc2_list *lmessages_ret = ezgrpc2_list_new(NULL);
   for (int i = 0; i < 2; i++, pp++) {
-    ezgrpc2_message_t *msg = ezgrpc2_message_new(11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(11);
     msg->is_compressed = 0;
     memcpy(msg->data, "    path1!", 11);
     *(uint32_t*)(msg->data) = pp;
@@ -64,9 +64,9 @@ ezgrpc2_list_t *callback_path1(ezgrpc2_list_t *lmessages){
 
 
 
-static void handle_event_message(ezgrpc2_event_t *event,
+static void handle_event_message(ezgrpc2_event *event,
                                  struct path_userdata_t *path_userdata,
-                                 ezgrpc2_server_t *server) {
+                                 ezgrpc2_server *server) {
   size_t nb_msg = ezgrpc2_list_count(event->message.lmessages);
   if (path_userdata->is_unary) {
     if (event->message.end_stream == 0 || nb_msg != 1) {
@@ -77,7 +77,7 @@ static void handle_event_message(ezgrpc2_event_t *event,
       return;
     }
   }
-  ezgrpc2_list_t *lmessages = path_userdata->callback(event->message.lmessages);
+  ezgrpc2_list *lmessages = path_userdata->callback(event->message.lmessages);
   switch (ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, lmessages)){
     case 0:
      /* ok */
@@ -99,15 +99,15 @@ static void handle_event_message(ezgrpc2_event_t *event,
 
 }
 
-static void handle_event_dataloss(ezgrpc2_event_t *event,
+static void handle_event_dataloss(ezgrpc2_event *event,
                                  struct path_userdata_t *path_userdata,
-                                 ezgrpc2_server_t *server) {
+                                 ezgrpc2_server *server) {
    ezgrpc2_server_session_stream_end(server, event->session_uuid, event->dataloss.stream_id, EZGRPC2_GRPC_STATUS_DATA_LOSS);
 }
 
-static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezgrpc2_path_t *paths,
+static void handle_events(ezgrpc2_server *server, ezgrpc2_list *levents, ezgrpc2_path *paths,
                           size_t nb_paths) {
-  ezgrpc2_event_t *event;
+  ezgrpc2_event *event;
   /* check for events in the paths */
   while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     switch (event->type) {
@@ -140,12 +140,12 @@ int main() {
   (void)ezgrpc2_global_init(0);
   int res;
   const size_t nb_paths = 2;
-  ezgrpc2_path_t paths[nb_paths];
+  ezgrpc2_path paths[nb_paths];
   struct path_userdata_t path_userdata[nb_paths];
 
 
   /* The heart of this API */
-  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL, NULL);
+  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, NULL, NULL);
   assert(server != NULL);
 
 
@@ -194,7 +194,7 @@ int main() {
   //    3. Get finish tasks from the thread pool (thread pool poll)
   //    4. Send the results. (give the result to the client)
 
-  ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *levents = ezgrpc2_list_new(NULL);
   while (1) {
     /* if thread pool is empty, maybe we can give our resources to the cpu
      * and wait a little longer.

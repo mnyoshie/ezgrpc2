@@ -3,14 +3,14 @@
 
 #include <pthread.h>
 #include "ezgrpc2_list.h"
-struct thpool_t {
+struct thpool {
   size_t max_queue, max_finished;
 
 #ifdef NO_COUNT
   size_t nb_finished, nb_queue;
 #endif
   // task queue
-  ezgrpc2_list_t *queue;
+  ezgrpc2_list *queue;
   // finished task queue
 
   int nb_threads;

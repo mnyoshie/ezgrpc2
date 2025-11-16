@@ -21,15 +21,15 @@
 
 struct userdata_t {
   i32 stream_id;
-  ezgrpc2_session_uuid_t *session_uuid;
+  ezgrpc2_session_uuid *session_uuid;
   char end_stream;
   ezgrpc2_grpc_status_t status;
 
   /* input messages. requested by the client */
-  ezgrpc2_list_t *limessages;
+  ezgrpc2_list *limessages;
 
   /* output messages. our server response */
-  ezgrpc2_list_t *lomessages;
+  ezgrpc2_list *lomessages;
 };
 
 struct path_userdata_t {
@@ -38,10 +38,10 @@ struct path_userdata_t {
 };
 
 /* pops all the messages and frees the list */
-void free_lmessages(ezgrpc2_list_t *lmessages){
+void free_lmessages(ezgrpc2_list *lmessages){
   if (lmessages == NULL)
     return;
-  ezgrpc2_message_t *msg;
+  ezgrpc2_message *msg;
   while ((msg = ezgrpc2_list_pop_front(lmessages)) != NULL) {
     ezgrpc2_message_free(msg);
   }
@@ -49,8 +49,8 @@ void free_lmessages(ezgrpc2_list_t *lmessages){
 }
 
 
-struct userdata_t *create_userdata(ezgrpc2_session_uuid_t *session_uuid, int32_t stream_id,
-    ezgrpc2_list_t *lmessages, char end_stream, ezgrpc2_grpc_status_t status) {
+struct userdata_t *create_userdata(ezgrpc2_session_uuid *session_uuid, int32_t stream_id,
+    ezgrpc2_list *lmessages, char end_stream, ezgrpc2_grpc_status_t status) {
   struct userdata_t *data = malloc(sizeof(*data));
   data->session_uuid = session_uuid;
   data->stream_id = stream_id;
@@ -81,7 +81,7 @@ void *callback_path0(void *data){
 
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 5; i++, pp++) {
-    ezgrpc2_message_t *msg = ezgrpc2_message_new(11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(11);
     msg->is_compressed = 0;
     memcpy(msg->data, "    path0!", 11);
     *(uint32_t*)(msg->data) = pp;
@@ -102,7 +102,7 @@ void *callback_path1(void *data){
 
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 5; i++, pp++) {
-    ezgrpc2_message_t *msg = ezgrpc2_message_new(11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(11);
     msg->is_compressed = 0;
     memcpy(msg->data, "    path1!", 11);
     *(uint32_t*)(msg->data) = pp;
@@ -117,11 +117,11 @@ void *callback_path1(void *data){
 }
 
 
-static void handle_event_message(ezgrpc2_event_t *event,
+static void handle_event_message(ezgrpc2_event *event,
                                  struct path_userdata_t *path_userdata,
-                                 ezgrpc2_server_t *server,
-                                 ezgrpc2_pthpool_t *opool,
-                                 ezgrpc2_pthpool_t *upool) {
+                                 ezgrpc2_server *server,
+                                 ezgrpc2_pthpool *opool,
+                                 ezgrpc2_pthpool *upool) {
   size_t nb_msg = ezgrpc2_list_count(event->message.lmessages);
   printf("stream_id %d, event message. nb_message %zu. end stream %d\n", event->message.stream_id,
          nb_msg, event->message.end_stream);
@@ -154,11 +154,11 @@ static void handle_event_message(ezgrpc2_event_t *event,
 #endif
 }
 
-static void handle_event_dataloss(ezgrpc2_event_t *event,
+static void handle_event_dataloss(ezgrpc2_event *event,
                                  struct path_userdata_t *path_userdata,
-                                 ezgrpc2_server_t *server,
-                                 ezgrpc2_pthpool_t *opool,
-                                 ezgrpc2_pthpool_t *upool) {
+                                 ezgrpc2_server *server,
+                                 ezgrpc2_pthpool *opool,
+                                 ezgrpc2_pthpool *upool) {
   printf("stream_id %d, event dataloss\n", event->dataloss.stream_id);
   /* Client ended the stream with a truncated gRPC message.
    *
@@ -193,10 +193,10 @@ static void handle_event_dataloss(ezgrpc2_event_t *event,
 
 }
 
-static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezgrpc2_path_t *paths,
-                          ezgrpc2_pthpool_t *opool,
-                          ezgrpc2_pthpool_t *upool) {
-  ezgrpc2_event_t *event;
+static void handle_events(ezgrpc2_server *server, ezgrpc2_list *levents, ezgrpc2_path *paths,
+                          ezgrpc2_pthpool *opool,
+                          ezgrpc2_pthpool *upool) {
+  ezgrpc2_event *event;
   /* check for events in the paths */
   while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     switch (event->type) {
@@ -222,8 +222,8 @@ static void handle_events(ezgrpc2_server_t *server, ezgrpc2_list_t *levents, ezg
   } /* while() */
 }
 
-static void handle_thread_pool(ezgrpc2_server_t *server, ezgrpc2_pthpool_t *pool) {
- ezgrpc2_list_t *lresults = ezgrpc2_list_new(NULL);
+static void handle_thread_pool(ezgrpc2_server *server, ezgrpc2_pthpool *pool) {
+ ezgrpc2_list *lresults = ezgrpc2_list_new(NULL);
  /* retrieve any finished tasks */
  ezgrpc2_pthpool_poll(pool, lresults);
  ezgrpc2_pthpool_result_t *result;
@@ -294,7 +294,7 @@ static void *signal_handler(void *data) {
 int main() {
   int res;
   const size_t nb_paths = 2;
-  ezgrpc2_path_t paths[nb_paths];
+  ezgrpc2_path paths[nb_paths];
   struct path_userdata_t path_userdata[nb_paths];
   res = ezgrpc2_global_init(0);
   if (res) 
@@ -327,11 +327,11 @@ int main() {
 #endif /* __unix__ */
 
   /* Tasks for unary requests (single message with end stream) */
-  ezgrpc2_pthpool_t *unordered_pool = NULL;
+  ezgrpc2_pthpool *unordered_pool = NULL;
   /* Tasks for streaming requests (multiple messages in a stream).
    * streaming rpc is generally slower than unary request since
    * the messages must be ordered and hence can't be parallelize */
-  ezgrpc2_pthpool_t *ordered_pool = NULL;
+  ezgrpc2_pthpool *ordered_pool = NULL;
 
   unordered_pool = ezgrpc2_pthpool_new(2, 0);
   assert(unordered_pool != NULL);
@@ -341,13 +341,13 @@ int main() {
   assert(ordered_pool != NULL);
 
   /* setup server settings */
-  ezgrpc2_server_settings_t *server_settings = ezgrpc2_server_settings_new(NULL);
+  ezgrpc2_server_settings *server_settings = ezgrpc2_server_settings_new(NULL);
   assert(server_settings != NULL);
   ezgrpc2_server_settings_set_log_level(server_settings, EZGRPC2_SERVER_LOG_ALL);
   ezgrpc2_server_settings_set_log_fp(server_settings, stderr);
 
   /* The heart of this API */
-  ezgrpc2_server_t *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, server_settings, NULL);
+  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, server_settings, NULL);
   ezgrpc2_server_settings_free(server_settings);
   assert(server != NULL);
 
@@ -398,7 +398,7 @@ int main() {
   //    4. Send the results. (give the result to the client)
 
 
-  ezgrpc2_list_t *levents = ezgrpc2_list_new(NULL);
+  ezgrpc2_list *levents = ezgrpc2_list_new(NULL);
   while (1) {
 #ifdef __unix__
     // if sigterm flag has been set by the signal handler, break the loop and kill
