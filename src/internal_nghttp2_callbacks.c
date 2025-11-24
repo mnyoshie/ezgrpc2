@@ -12,7 +12,7 @@
 
 #define atlog(...) (void)0
 
-extern ezgrpc2_event *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid *session_uuid, ...);
+extern ezgrpc2_event *event_new(ezgrpc2_event_type type, ezgrpc2_session_uuid *session_uuid, ...);
 
 static int list_cmp_ezstream_id(const void *data,const void *userdata) {
   return ((ezgrpc2_stream*)data)->stream_id != *(i32*)userdata;
@@ -39,15 +39,9 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list *lmessages
 
     if (seek + msg_len <= len) {
       last_seek = seek;
-      ezgrpc2_message *msg = calloc(1, sizeof(ezgrpc2_message));
+      ezgrpc2_message *msg = ezgrpc2_message_new(is_compressed, msg_data, msg_len);
       assert(msg != NULL);
 
-      msg->is_compressed = is_compressed;
-      msg->len = msg_len;
-      msg->data = malloc(msg->len);
-      assert(msg->data != NULL);
-
-      memcpy(msg->data, msg_data, msg_len);
       ezgrpc2_list_push_back(lmessages, msg);
     }
     seek += msg_len;
@@ -270,9 +264,7 @@ static int on_header_callback(nghttp2_session *session,
       if (!EZSTRCMP(ezsession->paths[i].path, value)) {
         ezstream->path = &ezsession->paths[i];
         ezstream->path_index = i;
-  #ifdef EZENABLE_DEBUG
-        atlog("found service %s\n", ezsession->paths[i].path);
-  #endif
+        EZGRPC2_LOG_TRACE(ezsession->server, "found service %s\n", ezsession->paths[i].path);
         break;
       }
     if (ezstream->path == NULL)
@@ -280,7 +272,17 @@ static int on_header_callback(nghttp2_session *session,
   }
   else if (!EZSTRCMP("content-type", name)) {
     int is_gt = valuelen >= 16;
+    ezstream->hcontent_type = strdup((char*)value);
     ezstream->is_content_grpc = is_gt ? !strncmp("application/grpc", (void *)value, 16) : 0;
+  }
+  else if (!EZSTRCMP("grpc-encoding", name)) {
+    ezstream->hgrpc_encoding = strdup((char*)value);
+  }
+  else if (!EZSTRCMP("grpc-accept-encoding", name)) {
+    ezstream->hgrpc_accept_encoding = strdup((char*)value);
+  }
+  else if (!EZSTRCMP("grpc-timeout", name)) {
+    ezstream->hgrpc_timeout = strdup((char*)value);
   }
   else if (!EZSTRCMP("te", name)) {
     ezstream->is_te_trailers = !EZSTRCMP("trailers", value);
@@ -365,7 +367,7 @@ static inline int on_frame_recv_headers(ezgrpc2_session *ezsession, const nghttp
 
   if (nghttp2_submit_headers(ezsession->ngsession, 0, ezstream->stream_id, NULL, nva, 2,
                            NULL)) {
-    atlog("fatal: nghttp2_submit_headers failed\n");
+    EZGRPC2_LOG_TRACE(ezsession->server, "nghttp2_submit_headers failed\n");
     return 1;
   }
 
@@ -469,8 +471,8 @@ static inline int on_frame_recv_data(ezgrpc2_session *ezsession, const nghttp2_f
     atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
     ezgrpc2_event *event = event_new(
       EZGRPC2_EVENT_MESSAGE,
-      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
-      ((ezgrpc2_event_message_t) {
+      &ezsession->session_uuid,
+      ((ezgrpc2_event_message) {
         .lmessages = lmessages,
         .end_stream = 1,
         .stream_id = frame->hd.stream_id,
@@ -489,8 +491,8 @@ static inline int on_frame_recv_data(ezgrpc2_session *ezsession, const nghttp2_f
     ezstream->recv_len -= lseek;
     ezgrpc2_event *event = event_new(
       EZGRPC2_EVENT_MESSAGE,
-      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
-      ((ezgrpc2_event_message_t) {
+      &ezsession->session_uuid,
+      ((ezgrpc2_event_message) {
         .lmessages = lmessages,
         .end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0,
         .stream_id = frame->hd.stream_id,
@@ -505,8 +507,8 @@ static inline int on_frame_recv_data(ezgrpc2_session *ezsession, const nghttp2_f
     atlog("event dataloss %zu\n", ezgrpc2_list_count(lmessages));
     ezgrpc2_event *event = event_new(
       EZGRPC2_EVENT_DATALOSS,
-      ezgrpc2_session_uuid_copy(&ezsession->session_uuid),
-      ((ezgrpc2_event_dataloss_t) {
+      &ezsession->session_uuid,
+      ((ezgrpc2_event_dataloss) {
         .stream_id = ezstream->stream_id,
       })
     );
@@ -617,18 +619,17 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, u8 flags,
   if ((ezstream->recv_len + len) > ezsession->server->http2_settings.initial_window_size) {
     nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE,
                               stream_id, 1);  // XXX send appropriate code
-    atlog(COLSTR("POST data exceeds maximum allowed size, killing stream %d\n",
-                  BHRED),
-           stream_id);
+    EZGRPC2_LOG_ERROR(
+      ezsession->server, "POST data exceeds maximum allowed size, killing stream %d\n",
+      stream_id
+    );
     return 1;
   }
 
 
   memcpy(ezstream->recv_data + ezstream->recv_len, data, len);
   ezstream->recv_len += len;
-#ifdef EZENABLE_DEBUG
-  atlog("data chunk recv %zu bytes at stream %d\n", len, stream_id);
-#endif
+  EZGRPC2_LOG_TRACE(ezsession->server, "data chunk recv %zu bytes at stream %d\n", len, stream_id);
 
   return 0;
 }

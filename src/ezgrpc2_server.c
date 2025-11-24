@@ -200,7 +200,6 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
   return server;
 
 err:
-  thpool_free(&server->logger_thread);
   ezgrpc2_server_free(server);
   return NULL;
 }
@@ -241,6 +240,7 @@ EZGRPC2_API int ezgrpc2_server_poll(
   if (fds[1].revents & POLLIN)
     session_add(server, levents, fds[1].fd);
 
+//  #pragma omp parallel for
   for (EZNFDS i = 2; i < nb_fds; i++) {
     if (fds[i].fd != -1 && fds[i].revents & (POLLRDHUP | POLLERR)) {
       ezlog("c hangup\n");
@@ -258,7 +258,7 @@ EZGRPC2_API int ezgrpc2_server_poll(
       if (session_events(&server->sessions[i])) {
 	EZGRPC2_LOG_TRACE(server,  "closing session %p", (void*) &server->sessions[i]);
         if (close(server->sessions[i].sockfd)) {
-	  EZGRPC2_LOG_ERROR(server, "@ %s: close: %s", __func__, strerror(errno));
+	  EZGRPC2_LOG_ERROR(server, "close: %s", strerror(errno));
         }
         fds[i].fd = -1;
         session_free(&server->sessions[i]);

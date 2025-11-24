@@ -107,7 +107,7 @@ struct ezgrpc2_stream {
   char *hcontent_type;
   char *hgrpc_encoding;
   char *hgrpc_accept_encoding;
-  char *htimeout;
+  char *hgrpc_timeout;
 
 
   /* stores `:path` */

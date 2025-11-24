@@ -23,7 +23,7 @@ struct userdata_t {
   i32 stream_id;
   ezgrpc2_session_uuid *session_uuid;
   char end_stream;
-  ezgrpc2_grpc_status_t status;
+  ezgrpc2_grpc_status status;
 
   /* input messages. requested by the client */
   ezgrpc2_list *limessages;
@@ -50,7 +50,7 @@ void free_lmessages(ezgrpc2_list *lmessages){
 
 
 struct userdata_t *create_userdata(ezgrpc2_session_uuid *session_uuid, int32_t stream_id,
-    ezgrpc2_list *lmessages, char end_stream, ezgrpc2_grpc_status_t status) {
+    ezgrpc2_list *lmessages, char end_stream, ezgrpc2_grpc_status status) {
   struct userdata_t *data = malloc(sizeof(*data));
   data->session_uuid = session_uuid;
   data->stream_id = stream_id;
@@ -81,9 +81,7 @@ void *callback_path0(void *data){
 
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 5; i++, pp++) {
-    ezgrpc2_message *msg = ezgrpc2_message_new(11);
-    msg->is_compressed = 0;
-    memcpy(msg->data, "    path0!", 11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(0, "    path0!", 11);
     *(uint32_t*)(msg->data) = pp;
     ezgrpc2_list_push_back(userdata->lomessages, msg);
   }
@@ -102,9 +100,7 @@ void *callback_path1(void *data){
 
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 5; i++, pp++) {
-    ezgrpc2_message *msg = ezgrpc2_message_new(11);
-    msg->is_compressed = 0;
-    memcpy(msg->data, "    path1!", 11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(0, "    path1!", 11);
     *(uint32_t*)(msg->data) = pp;
     ezgrpc2_list_push_back(userdata->lomessages, msg);
   }
@@ -137,12 +133,11 @@ static void handle_event_message(ezgrpc2_event *event,
   }
 #if 1
   struct userdata_t *data = create_userdata(
-      event->session_uuid, event->message.stream_id, event->message.lmessages,
+      ezgrpc2_session_uuid_copy(event->session_uuid), event->message.stream_id, event->message.lmessages,
       event->message.end_stream, 0 /* status ok */);
   /* we've taken ownership of this addresses. set to NULL to prevent ezgrpc2_event_free
    * from freeing it. */
    event->message.lmessages = NULL;
-   event->session_uuid = NULL;
 
   /* if path/service is unary, add task to upool, else add to opool */
   if (path_userdata->is_unary)
@@ -177,11 +172,10 @@ static void handle_event_dataloss(ezgrpc2_event *event,
   /* You may also send a status "EZGRPC2_GRPC_STATUS_DATA_LOSS", when the
    * message failed to be deserialized.
    */
-  struct userdata_t *data = create_userdata(event->session_uuid, event->dataloss.stream_id,
+  struct userdata_t *data = create_userdata(ezgrpc2_session_uuid_copy(event->session_uuid), event->dataloss.stream_id,
                          ezgrpc2_list_new(NULL), 1,
                          EZGRPC2_GRPC_STATUS_DATA_LOSS);
   /* weve taken ownershio of this address. clear */
-   event->session_uuid = NULL;
 
 
   if (path_userdata->is_unary)

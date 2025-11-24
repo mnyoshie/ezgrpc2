@@ -38,9 +38,7 @@ ezgrpc2_list *callback_path0(ezgrpc2_list *lmessages){
   /* if client did not request properly, skipp processing. */
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 2; i++, pp++) {
-    ezgrpc2_message *msg = ezgrpc2_message_new(11);
-    msg->is_compressed = 0;
-    memcpy(msg->data, "    path0!", 11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(0, "    path0!", 11);
     *(uint32_t*)(msg->data) = pp;
     
     ezgrpc2_list_push_back(lmessages_ret, msg);
@@ -51,9 +49,7 @@ ezgrpc2_list *callback_path0(ezgrpc2_list *lmessages){
 ezgrpc2_list *callback_path1(ezgrpc2_list *lmessages){
   ezgrpc2_list *lmessages_ret = ezgrpc2_list_new(NULL);
   for (int i = 0; i < 2; i++, pp++) {
-    ezgrpc2_message *msg = ezgrpc2_message_new(11);
-    msg->is_compressed = 0;
-    memcpy(msg->data, "    path1!", 11);
+    ezgrpc2_message *msg = ezgrpc2_message_new(0, "    path1!", 11);
     *(uint32_t*)(msg->data) = pp;
     ezgrpc2_list_push_back(lmessages_ret, msg);
   }
@@ -142,6 +138,8 @@ int main() {
   const size_t nb_paths = 2;
   ezgrpc2_path paths[nb_paths];
   struct path_userdata_t path_userdata[nb_paths];
+
+  signal(SIGPIPE, SIG_IGN);
 
 
   /* The heart of this API */

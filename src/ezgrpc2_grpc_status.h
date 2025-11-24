@@ -4,7 +4,7 @@
 /**
  * Types of trailer status codes
  */
-enum ezgrpc2_grpc_status_t {
+enum ezgrpc2_grpc_status {
   /* https://github.com/grpc/grpc/tree/master/include/grpcpp/impl/codegen */
   EZGRPC2_GRPC_STATUS_OK = 0,
   EZGRPC2_GRPC_STATUS_CANCELLED = 1,
@@ -24,8 +24,8 @@ enum ezgrpc2_grpc_status_t {
   EZGRPC2_GRPC_STATUS_UNAUTHENTICATED = 16,
   EZGRPC2_GRPC_STATUS_NULL = -1
 };
-typedef enum ezgrpc2_grpc_status_t ezgrpc2_grpc_status_t;
+typedef enum ezgrpc2_grpc_status ezgrpc2_grpc_status;
 
-char *ezgrpc2_grpc_status_strstatus(ezgrpc2_grpc_status_t status);
+char *ezgrpc2_grpc_status_strstatus(ezgrpc2_grpc_status status);
 
 #endif

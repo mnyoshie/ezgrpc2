@@ -22,7 +22,7 @@ you need process this event struct:
 struct ezgrpc2_event {
 
   ezgrpc2_session_uuid *session_uuid;
-  ezgrpc2_even_type type;
+  ezgrpc2_event_type type;
 
   union {
     ezgrpc2_event_message message;
@@ -101,14 +101,11 @@ if (res > 0) {
   }
 }
 ```
-Question: What is actually `session_uuid`? For simplicity, assume it's
-an address pointing to a 16 bytes universally unique identifier, but
+`sesssion_uuid` is an address pointing to a 16 bytes universally unique identifier, but
 this may vary between other systems so it's represented as an opaque type.
 
-Note: `ezgrpc2_event_free()` invalidates the address at
-`event->session_uuid` and all other members.  If you want to make
-use of `event->session_uuid`, set it to `NULL` after you've stored
-its address somewhere else, OR you may make a copy of it using
+Note: The address appointed to by `event->session_uuid` belongs
+to ezgrpc2. If you want to make a copy of it, you may do so using
 `ezgrpc2_session_uuid_copy()`. The lifetime of this copy exists as long
 as the program is running. Of course, you would also have manually free
 this copy using `ezgrpc2_session_uuid_free()`.

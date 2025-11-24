@@ -9,7 +9,7 @@
 #define atlog(...) (void)0
 //#define ezlog(...) (void)0
 
-extern ezgrpc2_event *event_new(ezgrpc2_event_type_t type, ezgrpc2_session_uuid *session_uuid, ...);
+extern ezgrpc2_event *event_new(ezgrpc2_event_type type, ezgrpc2_session_uuid *session_uuid, ...);
 
 #ifdef _WIN32
 int makenonblock(SOCKET sockfd) {
@@ -160,6 +160,9 @@ void session_free(ezgrpc2_session *ezsession) {
       ezgrpc2_session_uuid_copy(&ezsession->session_uuid));
   ezgrpc2_list_push_back(ezsession->server->levents, event);
 
+  // Do not free this. It's not malloced
+  // ezgrpc2_session_uuid_free(ezsession->session_uuid);
+
   nghttp2_session_terminate_session(ezsession->ngsession, 0);
   nghttp2_session_del(ezsession->ngsession);
 
@@ -167,7 +170,6 @@ void session_free(ezgrpc2_session *ezsession) {
   while ((ezstream = ezgrpc2_list_pop_front(ezsession->lstreams)) != NULL)
     stream_free(ezstream);
 
-  //ezgrpc2_session_uuid_free(ezsession->session_uuid);
   //ezsession->session_uuid = NULL;
 
   memset(ezsession, 0, sizeof(*ezsession));
@@ -387,6 +389,10 @@ ezgrpc2_stream *stream_new(i32 stream_id) {
 /* only frees what is passed. it does not free all the linked lists */
 void stream_free(ezgrpc2_stream *ezstream) {
   free(ezstream->recv_data);
+  free(ezstream->hgrpc_encoding);
+  free(ezstream->hgrpc_accept_encoding);
+  free(ezstream->hcontent_type);
+  free(ezstream->hgrpc_timeout);
 
   for (size_t i = 0; i < ezstream->nb_headers; i++) {
     free(ezstream->headers[i].value);

@@ -1,7 +1,7 @@
 #include "core.h"
 #include "ezgrpc2_grpc_status.h"
 
-EZGRPC2_API char *ezgrpc2_grpc_status_strstatus(ezgrpc2_grpc_status_t status) {
+EZGRPC2_API char *ezgrpc2_grpc_status_strstatus(ezgrpc2_grpc_status status) {
   switch (status) {
     case EZGRPC2_GRPC_STATUS_OK:
       return "ok";

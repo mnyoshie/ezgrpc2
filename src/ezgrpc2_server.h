@@ -61,11 +61,11 @@ struct ezgrpc2_server;
  *
  */
 ezgrpc2_server *ezgrpc2_server_new(
-  const char *ipv4_addr, u16 ipv4_port,
-  const char *ipv6_addr, u16 ipv6_port,
+  const char *restrict ipv4_addr, u16 ipv4_port,
+  const char *restrict ipv6_addr, u16 ipv6_port,
   int backlog,
-  ezgrpc2_server_settings *server_settings,
-  ezgrpc2_http2_settings *http2_settings);
+  ezgrpc2_server_settings *restrict server_settings,
+  ezgrpc2_http2_settings *restrict http2_settings);
 
 
 /**
@@ -84,7 +84,7 @@ ezgrpc2_server *ezgrpc2_server_new(
  *    * On error, a negative value.
  *
  * .. note::
- *    The :c:member:`ezgrpc2_path.levents` needs to be
+ *    The ``levents`` needs to be
  *    initialized first with, :c:func:`ezgrpc2_list_init()`.
  *
  *

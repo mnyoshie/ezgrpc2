@@ -73,7 +73,7 @@ int ezgrpc2_server_session_stream_end(
   ezgrpc2_server *ezserver,
   ezgrpc2_session_uuid *session_uuid,
   i32 stream_id,
-  ezgrpc2_grpc_status_t status);
+  ezgrpc2_grpc_status status);
 
 /**
  * The :c:func:`ezgrpc2_server_session_end()` ends the session
