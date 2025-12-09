@@ -38,9 +38,9 @@ EZGRPC2_API void ezgrpc2_event_free(ezgrpc2_event *event) {
       }
     ezgrpc2_list_free(event->message.lmessages);
   } break;
-  case EZGRPC2_EVENT_CONNECT:
   case EZGRPC2_EVENT_DISCONNECT:
     ezgrpc2_session_uuid_free(event->session_uuid);
+  case EZGRPC2_EVENT_CONNECT:
   case EZGRPC2_EVENT_CANCEL:
   case EZGRPC2_EVENT_DATALOSS:
     break;

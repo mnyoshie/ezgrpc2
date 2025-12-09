@@ -26,7 +26,7 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list *lmessages
     if (seek + 1 > len) {
       return last_seek;
     }
-    i8 is_compressed = wire[seek];
+    i8 compressed_flag = wire[seek];
     seek += 1;
 
     if (seek + 4 > len) {
@@ -39,7 +39,7 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list *lmessages
 
     if (seek + msg_len <= len) {
       last_seek = seek;
-      ezgrpc2_message *msg = ezgrpc2_message_new(is_compressed, msg_data, msg_len);
+      ezgrpc2_message *msg = ezgrpc2_message_new(compressed_flag, msg_data, msg_len);
       assert(msg != NULL);
 
       ezgrpc2_list_push_back(lmessages, msg);
@@ -108,7 +108,7 @@ nghttp2_ssize data_source_read_callback2(nghttp2_session *ngsession,
     }
     /* if we can fit 5 bytes or more to the buffer */
     if (buf_seek + 5 <= buf_len)  {
-      buf[buf_seek++] = msg->is_compressed;
+      buf[buf_seek++] = msg->compressed_flag;
       uint32_t len = htonl(msg->len);
       memcpy(buf + buf_seek, &len, 4);
       buf_seek += 4;

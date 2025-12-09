@@ -2,7 +2,18 @@ CC ?= gcc
 AR ?= ar
 CXX ?= g++
 
+# 0: poll
+# 1: epoll
+IO_METHOD ?= 0
+
 CFLAGS += -Wall -std=c23 -pedantic
+CFLAGS += -D_FORTIFY_SOURCE=2
+# enable optimization if D is not set
+ifeq ($(strip $(D)),)
+  CFLAGS += -O2
+endif
+
+# used in setting up in command line
 EXTRACFLAGS ?=
 
 ifeq ($(D),1)

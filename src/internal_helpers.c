@@ -182,12 +182,10 @@ void session_free(ezgrpc2_session *ezsession) {
 
 
 
-ezgrpc2_session *session_find(ezgrpc2_session *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid *session_uuid) {
-  for (size_t i = 0; i < nb_ezsessions; i++) 
-    if (ezgrpc2_session_uuid_is_equal(&ezsessions[i].session_uuid, session_uuid))
-      return ezsessions + i;
+ezgrpc2_session *session_find(ezgrpc2_session *sessions, size_t nb_sessions, ezgrpc2_session_uuid *session_uuid) {
+  assert(session_uuid->index < nb_sessions);
+  return ezgrpc2_session_uuid_is_equal(session_uuid, &(sessions + session_uuid->index)->session_uuid) ? sessions + session_uuid->index: NULL;
 
-  return NULL;
 }
 
 
@@ -297,10 +295,10 @@ int session_create(
   /*  all seems to be successful. set the following */
   ezsession->lstreams = ezgrpc2_list_new(NULL);
 #ifdef _WIN32
-  RPC_STATUS wres = UuidCreate(&ezsession->session_uuid);
+  RPC_STATUS wres = UuidCreate(&ezsession->session_uuid.uuid);
   assert(wres == RPC_S_OK);
 #else
-  uuid_generate_random(ezsession->session_uuid);
+  uuid_generate_random(ezsession->session_uuid.uuid);
 #endif
 
   return res;
@@ -338,8 +336,8 @@ int session_add(ezgrpc2_server *ezserver, ezgrpc2_list *levents, int listenfd) {
     close(confd);
     return 1;
   }
-  ezgrpc2_event *event = event_new(EZGRPC2_EVENT_CONNECT, 
-      ezgrpc2_session_uuid_copy(&ezserver->sessions[ndx].session_uuid));
+  ezserver->sessions[ndx].session_uuid.index = ndx;
+  ezgrpc2_event *event = event_new(EZGRPC2_EVENT_CONNECT, &ezserver->sessions[ndx].session_uuid);
   ezgrpc2_list_push_back(levents, event);
 
   fds[ndx].fd = confd;

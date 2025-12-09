@@ -34,6 +34,7 @@ objects += ezgrpc2_list.o
 objects += ezgrpc2_message.o
 #objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
+objects += ezgrpc2_ring.o
 objects += ezgrpc2_server.o
 objects += ezgrpc2_server_settings.o
 objects += ezgrpc2_session.o

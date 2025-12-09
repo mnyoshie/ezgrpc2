@@ -65,6 +65,7 @@ static char *strndup(char *c, size_t n) {
 #include "ezgrpc2_server_settings_struct.h"
 #include "ezgrpc2_session_info.h"
 #include "ezgrpc2_session_uuid.h"
+#include "ezgrpc2_session_uuid_struct.h"
 #include "ezgrpc2_http2_settings.h"
 #include "ezgrpc2_http2_settings_struct.h"
 
@@ -126,12 +127,11 @@ struct ezgrpc2_stream {
 typedef struct ezgrpc2_session ezgrpc2_session;
 struct ezgrpc2_session {
   nghttp2_session *ngsession;
+  ezgrpc2_session_uuid session_uuid;
 #ifdef _WIN32
-  UUID session_uuid;
   SOCKET sockfd;
   int socklen;
 #else
-  uuid_t session_uuid;
   int sockfd;
   socklen_t socklen;
 #endif
