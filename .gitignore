@@ -8,5 +8,6 @@ core
 test*.c
 *.swp
 push
+temp
 
 docs/build

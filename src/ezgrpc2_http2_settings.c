@@ -13,7 +13,8 @@
 static ezgrpc2_http2_settings default_http2_settings = {
   .initial_window_size = 1 << 20,
   .max_frame_size = 16*1024,
-  .max_concurrent_streams = 1024
+  .max_concurrent_streams = 1024,
+  .max_paths = 10
 };
 
 ezgrpc2_http2_settings *ezgrpc2_http2_settings_new(void *unused) {

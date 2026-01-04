@@ -16,7 +16,7 @@ EZGRPC2_API void ezgrpc2_ring_free(ezgrpc2_ring *ring);
 EZGRPC2_API int ezgrpc2_ring_write(ezgrpc2_ring *ring, void *data);
 
 /* appends to the last element */
-EZGRPC2_API void *ezgrpc2_ring_read(ezgrpc2_ring *ring, void *data);
+EZGRPC2_API void *ezgrpc2_ring_read(ezgrpc2_ring *ring);
 
 
 

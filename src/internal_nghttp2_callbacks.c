@@ -18,7 +18,7 @@ static int list_cmp_ezstream_id(const void *data,const void *userdata) {
   return ((ezgrpc2_stream*)data)->stream_id != *(i32*)userdata;
 }
 
-static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list *lmessages) {
+static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_arena_message *arena_messages) {
   i8 *wire = data;
 
   size_t seek, last_seek = 0;
@@ -33,18 +33,21 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list *lmessages
       /* atlog("exceeded length prefixed\n"); */
       return last_seek;
     }
-    u32 msg_len = ntohl(uread_u32(wire + seek));
+    uint32_t msg_len = ntohl(uread_u32(wire + seek));
     seek += 4;
     void *msg_data = wire + seek;
 
-    if (seek + msg_len <= len) {
-      last_seek = seek;
-      ezgrpc2_message *msg = ezgrpc2_message_new(compressed_flag, msg_data, msg_len);
-      assert(msg != NULL);
-
-      ezgrpc2_list_push_back(lmessages, msg);
+    if (seek + msg_len > len) {
+      seek += msg_len;
+      continue;
     }
-    seek += msg_len;
+
+    last_seek = seek;
+    ezgrpc2_message *msg = ezgrpc2_arena_message_malloc(arena_messages, msg_len);
+    assert(msg != NULL);
+    msg->compressed_flag = compressed_flag;
+    memcpy(msg->data, msg_data, msg_len);
+
   }
 
   return last_seek;
@@ -468,39 +471,31 @@ static inline int on_frame_recv_data(ezgrpc2_session *ezsession, const nghttp2_f
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0) {
     /* In scenarios where the Request stream needs to be closed but no data remains
      * to be sent implementations MUST send an empty DATA frame with this flag set. */
+    ezgrpc2_event *event = ezgrpc2_arena_event_malloc(ezsession->server->arena_events);
+    assert(event != NULL);
     atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event *event = event_new(
-      EZGRPC2_EVENT_MESSAGE,
-      &ezsession->session_uuid,
-      ((ezgrpc2_event_message) {
-        .lmessages = lmessages,
-        .end_stream = 1,
-        .stream_id = frame->hd.stream_id,
-      })
-    );
+    event->type = EZGRPC2_EVENT_MESSAGE;
+    event->session_uuid = &ezsession->session_uuid;
+    event->message.stream_id = frame->hd.stream_id;
+    event->message.end_stream = 1;
+    event->message.lmessages = lmessages;
 
-    ezgrpc2_list_push_back(ezsession->server->levents, event);
     return 0;
   }
 
-  size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, lmessages);
+  size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, ezsession->server->arena_messages);
   if (lseek != 0) {
     assert(lseek <= ezstream->recv_len);
     EZGRPC2_LOG_TRACE(ezsession->server, "event message %zu\n", ezgrpc2_list_count(lmessages));
     memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
     ezstream->recv_len -= lseek;
-    ezgrpc2_event *event = event_new(
-      EZGRPC2_EVENT_MESSAGE,
-      &ezsession->session_uuid,
-      ((ezgrpc2_event_message) {
-        .lmessages = lmessages,
-        .end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0,
-        .stream_id = frame->hd.stream_id,
-      })
-    );
+    ezgrpc2_event *event = ezgrpc2_arena_event_malloc(ezsession->server->arena_events);
+    event->type = EZGRPC2_EVENT_MESSAGE;
+    event->session_uuid = &ezsession->session_uuid;
+    event->message.end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0;
+    event->message.stream_id = frame->hd.stream_id;
     event->message.path_index = ezstream->path_index;
 
-    ezgrpc2_list_push_back(ezsession->server->levents, event);
   }
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
     /* we've receaived an end stream but last message is truncated */

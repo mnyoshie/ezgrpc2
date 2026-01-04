@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include "common.h"
 
+#include "ezgrpc2_arena_event.h"
+#include "ezgrpc2_arena_message.h"
 #include "ezgrpc2_event.h"
 #include "ezgrpc2_global.h"
 #include "ezgrpc2_http2_settings.h"

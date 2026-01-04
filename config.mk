@@ -4,10 +4,16 @@ CXX ?= g++
 
 # 0: poll
 # 1: epoll
-IO_METHOD ?= 0
+CONFIG_IO_METHOD ?= 0
+CONFIG_PATH_MAX_LEN = 64
+
+
+CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)
+CFLAGS += -DCONFIG_IO_METHOD=$(CONFIG_IO_METHOD)
 
 CFLAGS += -Wall -std=c23 -pedantic
 CFLAGS += -D_FORTIFY_SOURCE=2
+
 # enable optimization if D is not set
 ifeq ($(strip $(D)),)
   CFLAGS += -O2

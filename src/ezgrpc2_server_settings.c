@@ -31,6 +31,8 @@ static ssize_t read_cb(void *const sock, void *buf, size_t len, int flags) {
 
 static ezgrpc2_server_settings default_server_settings = {
   .max_connections = 1024,
+  .arena_events_size = sizeof(ezgrpc2_event)*4096,
+  .arena_messages_size = (sizeof(ezgrpc2_message)+1024*1034*16) ,
   .logging_level = 0,
 };
 
@@ -49,6 +51,10 @@ EZGRPC2_API void ezgrpc2_server_settings_set_max_connections(ezgrpc2_server_sett
 EZGRPC2_API void ezgrpc2_server_settings_set_log_fp(ezgrpc2_server_settings *server_settings, FILE *fp) {
   server_settings->logging_fp = fp;
 }
+
+//EZGRPC2_API void ezgrpc2_server_settings_set_revents_depth(ezgrpc2_server_settings *server_settings, size_t depth) {
+//  server_settings->revents_depth = depth;
+//}
 
 EZGRPC2_API void ezgrpc2_server_settings_set_log_level(ezgrpc2_server_settings *server_settings, uint32_t logging_level) {
   server_settings->logging_level = logging_level;

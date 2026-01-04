@@ -205,7 +205,7 @@ int main() {
 
     if (res > 0) {
       puts("incoming events");
-      // step 2. Give the task to the thread pool
+      // step 2, 3 and 4
       handle_events(server, levents, paths, nb_paths);
     }
     else if (res == 0) {
