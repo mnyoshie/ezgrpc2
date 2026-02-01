@@ -25,6 +25,8 @@ targets += libezgrpc2.a
 
 objects = thpool.o
 
+objects += ezgrpc2_arena_event.o
+objects += ezgrpc2_arena_message.o
 objects += ezgrpc2_event.o
 objects += ezgrpc2_global.o
 objects += ezgrpc2_grpc_status.o
@@ -34,7 +36,7 @@ objects += ezgrpc2_list.o
 objects += ezgrpc2_message.o
 #objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
-objects += ezgrpc2_ring.o
+#objects += ezgrpc2_ring.o
 objects += ezgrpc2_server.o
 objects += ezgrpc2_server_settings.o
 objects += ezgrpc2_session.o
@@ -53,7 +55,7 @@ libezgrpc2.a : $(objects)
 	$(Q)$(AR) rcs $@ $^
 
 libezgrpc2.so : $(objects)
-	$(Q)$(CC) -shared $(CFLAGS) $^ -o $@
+	$(Q)$(CC) -shared -lnghttp2 $^ -o $@
 
 libezgrpc2.dll : $(objects)
 	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -o $@

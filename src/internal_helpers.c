@@ -305,7 +305,7 @@ int session_create(
 }
 
 
-int session_add(ezgrpc2_server *ezserver, ezgrpc2_list *levents, int listenfd) {
+int session_add(ezgrpc2_server *ezserver, int listenfd) {
   struct sockaddr_storage sockaddr;
   struct pollfd *fds = ezserver->fds;
   EZNFDS nb_fds = ezserver->nb_fds;
@@ -337,8 +337,10 @@ int session_add(ezgrpc2_server *ezserver, ezgrpc2_list *levents, int listenfd) {
     return 1;
   }
   ezserver->sessions[ndx].session_uuid.index = ndx;
-  ezgrpc2_event *event = event_new(EZGRPC2_EVENT_CONNECT, &ezserver->sessions[ndx].session_uuid);
-  ezgrpc2_list_push_back(levents, event);
+  ezgrpc2_event *event = ezgrpc2_arena_event_malloc(ezserver->arena_events);
+  //event_new(EZGRPC2_EVENT_CONNECT, &ezserver->sessions[ndx].session_uuid);
+  event->type = EZGRPC2_EVENT_CONNECT;
+  event->session_uuid = &ezserver->sessions[ndx].session_uuid;
 
   fds[ndx].fd = confd;
   fds[ndx].events = POLLIN | POLLRDHUP;

@@ -114,7 +114,6 @@ void *callback_path1(void *data){
 
 
 static void handle_event_message(ezgrpc2_event *event,
-                                 struct path_userdata_t *path_userdata,
                                  ezgrpc2_server *server,
                                  ezgrpc2_pthpool *opool,
                                  ezgrpc2_pthpool *upool) {
@@ -122,6 +121,7 @@ static void handle_event_message(ezgrpc2_event *event,
   printf("stream_id %d, event message. nb_message %zu. end stream %d\n", event->message.stream_id,
          nb_msg, event->message.end_stream);
 
+  struct path_userdata_t *path_userdata = event->userdata;
   if (path_userdata->is_unary) {
     if (event->message.end_stream == 0 || nb_msg != 1) {
       /* This is unary service, but they are sending more than one message */
@@ -150,7 +150,6 @@ static void handle_event_message(ezgrpc2_event *event,
 }
 
 static void handle_event_dataloss(ezgrpc2_event *event,
-                                 struct path_userdata_t *path_userdata,
                                  ezgrpc2_server *server,
                                  ezgrpc2_pthpool *opool,
                                  ezgrpc2_pthpool *upool) {
@@ -172,6 +171,8 @@ static void handle_event_dataloss(ezgrpc2_event *event,
   /* You may also send a status "EZGRPC2_GRPC_STATUS_DATA_LOSS", when the
    * message failed to be deserialized.
    */
+                
+  struct path_userdata_t *path_userdata = event->userdata;
   struct userdata_t *data = create_userdata(ezgrpc2_session_uuid_copy(event->session_uuid), event->dataloss.stream_id,
                          ezgrpc2_list_new(NULL), 1,
                          EZGRPC2_GRPC_STATUS_DATA_LOSS);
@@ -195,10 +196,10 @@ static void handle_events(ezgrpc2_server *server, ezgrpc2_list *levents, ezgrpc2
   while ((event = ezgrpc2_list_pop_front(levents)) != NULL) {
     switch (event->type) {
     case EZGRPC2_EVENT_MESSAGE:
-      handle_event_message(event, paths[event->message.path_index].userdata, server, opool, upool);
+      handle_event_message(event, server, opool, upool);
       break;
     case EZGRPC2_EVENT_DATALOSS:
-      handle_event_dataloss(event, paths[event->dataloss.path_index].userdata, server, opool, upool);
+      handle_event_dataloss(event, server, opool, upool);
       break;
     case EZGRPC2_EVENT_CANCEL:
       printf("event cancel on stread %d\n\n", event->cancel.stream_id);
@@ -346,13 +347,6 @@ int main() {
   assert(server != NULL);
 
 
-  /*-----------------------------.
-  | What services do we provide? |
-  `-----------------------------*/
-
-  paths[0].path = "/test.yourAPI/whatever_service1";
-  paths[1].path = "/test.yourAPI/whatever_service2";
-
   /* we expect to receive one or more grpc message in a
    * single stream.
    * */
@@ -366,6 +360,13 @@ int main() {
   path_userdata[1].callback = callback_path1;
   paths[1].userdata = path_userdata + 1;
 
+
+  /*-----------------------------.
+  | What services do we provide? |
+  `-----------------------------*/
+
+  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service1", path_userdata, 0, 0);
+  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service2", path_userdata + 1, 0, 0);
 
 
 
@@ -409,7 +410,7 @@ int main() {
      */
     int timeout = is_pool_empty ? 10000 : 10;
     // step 1. server poll
-    if ((res = ezgrpc2_server_poll(server, levents, paths, nb_paths, timeout)) < 0)
+    if ((res = ezgrpc2_server_poll(server, levents, timeout)) < 0)
       break;
 
     if (res > 0) {

@@ -18,10 +18,4 @@ typedef int64_t i64;
 typedef uint64_t u64;
 
 
-/* unaligned read unsigned 32 */
-static inline uint32_t uread_u32(void *p) {
-  uint32_t ret;
-  memcpy(&ret, p, 4);
-  return ret;
-}
 #endif

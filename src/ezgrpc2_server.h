@@ -1,6 +1,8 @@
 #ifndef EZGRPC2_SERVER_H
 #define EZGRPC2_SERVER_H
 #include <stdint.h>
+
+#include "defs.h"
 #include "ezgrpc2_path.h"
 #include "ezgrpc2_http2_settings.h"
 #include "ezgrpc2_server_settings.h"
@@ -60,7 +62,7 @@ struct ezgrpc2_server;
  *    ezgrpc2_server *ezgrpc2_server_new("0.0.0.0", 8080, "::", 8080, 16, NULL);
  *
  */
-ezgrpc2_server *ezgrpc2_server_new(
+EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
   const char *restrict ipv4_addr, u16 ipv4_port,
   const char *restrict ipv6_addr, u16 ipv6_port,
   int backlog,
@@ -89,14 +91,17 @@ ezgrpc2_server *ezgrpc2_server_new(
  *
  *
  */
-int ezgrpc2_server_poll(
+EZGRPC2_API int ezgrpc2_server_poll(
   ezgrpc2_server *restrict server,
   ezgrpc2_list *restrict levents,
-  ezgrpc2_path *restrict paths,
-  size_t nb_paths,
   int timeout);
 
-void ezgrpc2_server_free(
+
+EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, char *path, void *userdata, uint64_t accept_content_type, uint64_t accept_content_encoding);
+
+EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, char *path);
+
+EZGRPC2_API void ezgrpc2_server_free(
   ezgrpc2_server *server);
 
 ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server);
@@ -104,7 +109,7 @@ ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server);
 ezgrpc2_session_info *ezgrpc2_server_get_session_info(ezgrpc2_server *restrict server, ezgrpc2_session_uuid *restrict session_uuid);
 
 
-void ezgrpc2_server_log(ezgrpc2_server *restrict server, uint32_t log_level, char *restrict fmt, ...);
+EZGRPC2_API void ezgrpc2_server_log(ezgrpc2_server *restrict server, uint32_t log_level, char *restrict fmt, ...);
 
 
 #endif

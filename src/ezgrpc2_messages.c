@@ -41,12 +41,12 @@ static size_t is_valid_length_prefixed_messages(void *data, size_t len, size_t *
 ezgrpc2_message ezgrpc2_messages_peek(ezgrpc2_messages *messages) {
   if (messages->seek == messages->data_len)
     return (ezgrpc2_message) {
-      .compressed_flag = 0,
+      .cflag = 0,
       .len = 0,
       .data = NULL
     };
   return (ezgrpc2_message){
-    .compressed_flag = messages->data[messages->seek],
+    .cflag = messages->data[messages->seek],
     .len = htonl(uread_u32(messages->data + messages->seek + 1)),
     .data = messages->data + messages->seek + 4
   };
@@ -63,18 +63,18 @@ size_t ezgrpc2_messages_count(ezgrpc2_messages *messages) {
 ezgrpc2_message ezgrpc2_messages_next(ezgrpc2_messages *messages) {
   if (messages->seek == messages->data_len)
     return (ezgrpc2_message) {
-      .compressed_flag = 0,
+      .cflag = 0,
       .len = 0,
       .data = NULL
     };
-  char compressed_flag = messages->data[messages->seek++];
+  char cflag = messages->data[messages->seek++];
   size_t len = htonl(uread_u32((u8*)messages->data + messages->seek));
   messages->seek += 4;
   size_t pseek = messages->seek;
 
 
   return messages->seek += len, (ezgrpc2_message){
-    .compressed_flag = compressed_flag,
+    .cflag = cflag,
     .len = len,
     .data = messages->data + pseek 
   };

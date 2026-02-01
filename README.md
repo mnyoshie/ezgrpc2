@@ -23,6 +23,7 @@ struct ezgrpc2_event {
 
   ezgrpc2_session_uuid *session_uuid;
   ezgrpc2_event_type type;
+  void *userdata;
 
   union {
     ezgrpc2_event_message message;
@@ -64,16 +65,14 @@ ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, backlog
 
 Setting up service:
 ```c
-const int nb_paths = 1;
-ezgrpc2_path paths[nb_paths];
-paths[0].paths = "/test.yourAPI/whatever_service";
+ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service", path_userdata, 0, 0);
 ```
 
 Polling for events:
 ```c
 ezgrpc2_list *levents = ezgrpc2_list_new(NULL);
 int timeout = 10000;
-int res = ezgrpc2_server_poll(server, levents, paths, nb_paths, timeout);
+int res = ezgrpc2_server_poll(server, levents, timeout);
 ```
 
 Handle events:
@@ -112,9 +111,8 @@ this copy using `ezgrpc2_session_uuid_free()`.
 
 Creating a message:
 ```c
-ezgrpc2_message *message = ezgrpc2_message_new(11);
-message->is_compressed = 0;
-memcpy(message->data, "Hello mom!", 11);
+char greet[] = "Hello mom!";
+ezgrpc2_message *message = ezgrpc2_message_new2(0, greet, sizeof(greet));
 
 ezgrpc2_list *lmessages = ezgrpc2_list_new(NULL);
 ezgrpc2_list_push_back(lmessages, message);

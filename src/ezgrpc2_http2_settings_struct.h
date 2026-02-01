@@ -6,5 +6,6 @@ struct ezgrpc2_http2_settings {
   size_t max_frame_size;
   size_t max_concurrent_streams;
   size_t max_sessions;
+  size_t max_paths;
 };
 #endif

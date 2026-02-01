@@ -1,6 +1,7 @@
 #include <errno.h>
 
 #include "core.h"
+#include "ezgrpc2_header.h"
 #include "ezgrpc2_server.h"
 #include "ezgrpc2_session_info.h"
 #include "ezgrpc2_session_uuid.h"
@@ -35,8 +36,8 @@ EZGRPC2_API ezgrpc2_session_info *ezgrpc2_server_get_session_info(ezgrpc2_server
 }
 
 EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
-  const char *ipv4_addr, u16 ipv4_port,
-  const char *ipv6_addr, u16 ipv6_port,
+  const char *ipv4_addr, uint16_t ipv4_port,
+  const char *ipv6_addr, uint16_t ipv6_port,
   int backlog,
   ezgrpc2_server_settings *server_settings,
   ezgrpc2_http2_settings *http2_settings) {
@@ -184,10 +185,14 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
   server->fds = calloc(server->nb_fds, sizeof(*(server->fds)));
   if (server->fds == NULL)
     goto err;
+  server->paths = calloc(server->http2_settings.max_paths, sizeof(*server->paths));
   server->fds[0].fd = ipv4_sockfd;
   server->fds[0].events = POLLIN | POLLRDHUP;
   server->fds[1].fd = ipv6_sockfd;
   server->fds[1].events = POLLIN | POLLRDHUP;
+  server->arena_events = ezgrpc2_arena_event_new(server->server_settings.arena_events_size);
+  server->arena_messages = ezgrpc2_arena_message_new(server->server_settings.arena_messages_size);
+  assert(server->arena_events != NULL && server->arena_messages != NULL);
 
   for (EZNFDS i = 2; i < server->nb_fds; i++)
   {
@@ -216,10 +221,64 @@ err:
 EZGRPC2_API int ezgrpc2_server_poll(
   ezgrpc2_server *server,
   ezgrpc2_list *levents,
-  ezgrpc2_path *paths,
-  size_t nb_paths,
   int timeout) {
   assert(levents != NULL);
+  struct pollfd *fds = server->fds;
+
+#ifdef _WIN32
+  const ULONG nb_fds = server->nb_fds;
+  const int ready = WSAPoll(fds, nb_fds, timeout);
+#else
+  const nfds_t nb_fds = server->nb_fds;
+  const int ready = poll(fds, nb_fds, timeout);
+#endif
+
+  if (ready <= 0)
+    return ready;
+  server->levents = levents;
+
+    // add ipv4 session
+  if (fds[0].revents & POLLIN)
+    session_add(server, fds[0].fd);
+  // add ipv6 session
+  if (fds[1].revents & POLLIN)
+    session_add(server, fds[1].fd);
+
+//  #pragma omp parallel for
+  for (EZNFDS i = 2; i < nb_fds; i++) {
+    if (fds[i].fd != -1 && fds[i].revents & (POLLRDHUP | POLLERR)) {
+      ezlog("c hangup\n");
+      session_free(&server->sessions[i]);
+      fds[i].fd = -1;
+      fds[i].revents = 0;
+      //sleep(30);
+      continue;
+    }
+    if (fds[i].fd != -1 && fds[i].revents & POLLIN) {
+      server->sessions[i].server = server;
+      if (session_events(&server->sessions[i])) {
+	EZGRPC2_LOG_TRACE(server,  "closing session %p", (void*) &server->sessions[i]);
+        if (close(server->sessions[i].sockfd)) {
+	  EZGRPC2_LOG_ERROR(server, "close: %s", strerror(errno));
+        }
+        fds[i].fd = -1;
+        session_free(&server->sessions[i]);
+      }
+      fds[i].revents = 0;
+    }
+  }
+
+  return ready;
+}
+
+EZGRPC2_API ezgrpc2_event *ezgrpc2_server_events_read(
+  ezgrpc2_server *server) {
+  return ezgrpc2_arena_event_read(server->arena_events);
+}
+
+EZGRPC2_API int ezgrpc2_server_events_poll(
+  ezgrpc2_server *server,
+  int timeout) {
   struct pollfd *fds = server->fds;
 
 #ifdef _WIN32
@@ -235,10 +294,10 @@ EZGRPC2_API int ezgrpc2_server_poll(
 
     // add ipv4 session
   if (fds[0].revents & POLLIN)
-    session_add(server, levents, fds[0].fd);
+    session_add(server, fds[0].fd);
   // add ipv6 session
   if (fds[1].revents & POLLIN)
-    session_add(server, levents, fds[1].fd);
+    session_add(server, fds[1].fd);
 
 //  #pragma omp parallel for
   for (EZNFDS i = 2; i < nb_fds; i++) {
@@ -251,10 +310,7 @@ EZGRPC2_API int ezgrpc2_server_poll(
       continue;
     }
     if (fds[i].fd != -1 && fds[i].revents & POLLIN) {
-      server->sessions[i].nb_paths = nb_paths;
-      server->sessions[i].paths = paths;
       server->sessions[i].server = server;
-      server->levents = levents;
       if (session_events(&server->sessions[i])) {
 	EZGRPC2_LOG_TRACE(server,  "closing session %p", (void*) &server->sessions[i]);
         if (close(server->sessions[i].sockfd)) {
@@ -268,6 +324,30 @@ EZGRPC2_API int ezgrpc2_server_poll(
   }
 
   return ready;
+}
+
+EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, char *path, void *userdata, ezgrpc2_content_encoding accept_content_encoding, uint64_t accept_content_type) {
+  if (server->nb_paths + 1 > server->http2_settings.max_paths)
+    return 1;
+  strncpy(server->paths[server->nb_paths].path, path, sizeof(server->paths[server->nb_paths].path));
+  server->paths[server->nb_paths].userdata = userdata;
+  server->paths[server->nb_paths].accept_content_type = accept_content_type;
+  server->paths[server->nb_paths].accept_content_encoding = accept_content_encoding;
+  server->nb_paths++;
+  return 0;
+
+}
+
+EZGRPC2_API void *ezgrpc2_server_unregister_path(
+  ezgrpc2_server *server, char *path) {
+  for (size_t i = 0; i < server->http2_settings.max_paths; i++)
+    if (server->paths[0].path[0] && !strcmp(path, server->paths[i].path)) {
+      void *userdata = server->paths[i].userdata;
+      memset(&server->paths[i], 0, sizeof(ezgrpc2_path));
+      server->nb_paths--;
+      return userdata;
+    }
+  return NULL;
 }
 
 

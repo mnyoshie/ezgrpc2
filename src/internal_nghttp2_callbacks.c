@@ -18,36 +18,41 @@ static int list_cmp_ezstream_id(const void *data,const void *userdata) {
   return ((ezgrpc2_stream*)data)->stream_id != *(i32*)userdata;
 }
 
-static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list *lmessages) {
+static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_list **lmessages) {
   i8 *wire = data;
+  /* quick check if there's any message to parse */
+  do {
+    if (len < 4)
+      return 0;
+    if (len >= ntohl(uread_u32(wire + 1)) + 5)
+      *lmessages = ezgrpc2_list_new(NULL);
+  } while (0);
 
-  size_t seek, last_seek = 0;
-  for (seek = 0; seek < len;) {
-    if (seek + 1 > len) {
-      return last_seek;
+  size_t seek = 0, lseek = 0;
+  while (seek < len) {
+    if (seek + 5 > len) {
+      return lseek;
     }
-    i8 compressed_flag = wire[seek];
+    i8 cflag = wire[seek];
     seek += 1;
 
-    if (seek + 4 > len) {
-      /* atlog("exceeded length prefixed\n"); */
-      return last_seek;
-    }
-    u32 msg_len = ntohl(uread_u32(wire + seek));
+    uint32_t msg_len = ntohl(uread_u32(wire + seek));
     seek += 4;
     void *msg_data = wire + seek;
 
-    if (seek + msg_len <= len) {
-      last_seek = seek;
-      ezgrpc2_message *msg = ezgrpc2_message_new(compressed_flag, msg_data, msg_len);
-      assert(msg != NULL);
-
-      ezgrpc2_list_push_back(lmessages, msg);
+    if (seek + msg_len > len) {
+//      seek += msg_len;
+//      continue;
+      return lseek;
     }
-    seek += msg_len;
+
+    lseek = seek;
+    ezgrpc2_message *msg = ezgrpc2_message_new(cflag, msg_data, msg_len);
+    assert(msg != NULL);
+    ezgrpc2_list_push_back(*lmessages, msg);
   }
 
-  return last_seek;
+  return lseek;
 }
 
 /* ----------- BEGIN NGHTTP2 CALLBACKS ------------------*/
@@ -108,7 +113,7 @@ nghttp2_ssize data_source_read_callback2(nghttp2_session *ngsession,
     }
     /* if we can fit 5 bytes or more to the buffer */
     if (buf_seek + 5 <= buf_len)  {
-      buf[buf_seek++] = msg->compressed_flag;
+      buf[buf_seek++] = msg->cflag;
       uint32_t len = htonl(msg->len);
       memcpy(buf + buf_seek, &len, 4);
       buf_seek += 4;
@@ -233,7 +238,7 @@ static int on_header_callback(nghttp2_session *session,
   if (frame->hd.type != NGHTTP2_HEADERS)
     return 0;
 
-  if (ezstream->nb_headers + 1 >= EZGRPC2_STREAM_MAX_HEADERS) {
+  if (ezstream->nb_headers + 1 > CONFIG_STREAM_MAX_HEADERS) {
     EZGRPC2_LOG_ERROR(ezsession->server, "stream max headers exceeded\n");
     return 1;
   }
@@ -260,11 +265,10 @@ static int on_header_callback(nghttp2_session *session,
       atlog("couldn't find stream %d\n", frame->hd.stream_id);
       return 1;
     }
-    for (size_t i = 0; i < ezsession->nb_paths; i++) 
-      if (!EZSTRCMP(ezsession->paths[i].path, value)) {
-        ezstream->path = &ezsession->paths[i];
-        ezstream->path_index = i;
-        EZGRPC2_LOG_TRACE(ezsession->server, "found service %s\n", ezsession->paths[i].path);
+    for (size_t i = 0; i < ezsession->server->nb_paths; i++) 
+      if (!EZSTRCMP(ezsession->server->paths[i].path, value)) {
+        ezstream->path = &ezsession->server->paths[i];
+        EZGRPC2_LOG_TRACE(ezsession->server, "found service %s\n", ezstream->path->path);
         break;
       }
     if (ezstream->path == NULL)
@@ -460,62 +464,61 @@ static inline int on_frame_recv_data(ezgrpc2_session *ezsession, const nghttp2_f
                               frame->hd.stream_id, 1);
     return 0;
   }
-  if (ezstream->path == NULL)
+  if (ezstream->path == NULL) {
+    EZGRPC2_LOG_TRACE(ezsession->server, "path null\n");
     return 0;
+  }
 
-  ezgrpc2_list *lmessages = ezgrpc2_list_new(NULL);
 
   if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0) {
     /* In scenarios where the Request stream needs to be closed but no data remains
      * to be sent implementations MUST send an empty DATA frame with this flag set. */
-    atlog("event message %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event *event = event_new(
-      EZGRPC2_EVENT_MESSAGE,
-      &ezsession->session_uuid,
-      ((ezgrpc2_event_message) {
-        .lmessages = lmessages,
-        .end_stream = 1,
-        .stream_id = frame->hd.stream_id,
-      })
-    );
-
+    ezgrpc2_event *event = malloc(sizeof(*event));
+    assert(event != NULL);
+    event->type = EZGRPC2_EVENT_MESSAGE;
+    event->session_uuid = &ezsession->session_uuid;
+    event->userdata = ezstream->path->userdata;
+    event->message.stream_id = frame->hd.stream_id,
+    event->message.end_stream = 1;
+    event->message.lmessages = ezgrpc2_list_new(NULL);
+    atlog("event message %zu\n", ezgrpc2_list_count(lmessages)),
     ezgrpc2_list_push_back(ezsession->server->levents, event);
+
     return 0;
   }
 
-  size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, lmessages);
-  if (lseek != 0) {
-    assert(lseek <= ezstream->recv_len);
-    EZGRPC2_LOG_TRACE(ezsession->server, "event message %zu\n", ezgrpc2_list_count(lmessages));
-    memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
-    ezstream->recv_len -= lseek;
-    ezgrpc2_event *event = event_new(
-      EZGRPC2_EVENT_MESSAGE,
-      &ezsession->session_uuid,
-      ((ezgrpc2_event_message) {
-        .lmessages = lmessages,
-        .end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0,
-        .stream_id = frame->hd.stream_id,
-      })
-    );
-    event->message.path_index = ezstream->path_index;
+  do { 
+    ezgrpc2_list *lmessages;
+    size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, &lmessages);
+    if (lseek) {
+      assert(lseek <= ezstream->recv_len);
+      EZGRPC2_LOG_TRACE(ezsession->server, "event message %zu\n", ezgrpc2_list_count(lmessages));
+      memcpy(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
+      ezstream->recv_len -= lseek;
+  
+      ezgrpc2_event *event = malloc(sizeof(*event));
+      assert(event != NULL);
+      event->type = EZGRPC2_EVENT_MESSAGE;
+      event->session_uuid = &ezsession->session_uuid;
+      event->userdata = ezstream->path->userdata;
+      event->message.lmessages = lmessages;
+      event->message.end_stream = frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len == 0;
+      event->message.stream_id = frame->hd.stream_id;
+      ezgrpc2_list_push_back(ezsession->server->levents, event);
+    }
+  } while (0);
+
+  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len) {
+    /* we've receaived an end stream but last message is truncated */
+    atlog("event dataloss\n");
+    ezgrpc2_event *event = malloc(sizeof(*event));
+    assert(event != NULL);
+    event->type = EZGRPC2_EVENT_DATALOSS;
+    event->session_uuid = &ezsession->session_uuid;
+    event->userdata = ezstream->path->userdata;
+    event->dataloss.stream_id = ezstream->stream_id;
 
     ezgrpc2_list_push_back(ezsession->server->levents, event);
-  }
-  if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM && ezstream->recv_len != 0) {
-    /* we've receaived an end stream but last message is truncated */
-    atlog("event dataloss %zu\n", ezgrpc2_list_count(lmessages));
-    ezgrpc2_event *event = event_new(
-      EZGRPC2_EVENT_DATALOSS,
-      &ezsession->session_uuid,
-      ((ezgrpc2_event_dataloss) {
-        .stream_id = ezstream->stream_id,
-      })
-    );
-    event->dataloss.path_index = ezstream->path_index;
-  
-    ezgrpc2_list_push_back(ezsession->server->levents, event);
-    //event->message.end_stream = !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
   }
   return 0;
 }

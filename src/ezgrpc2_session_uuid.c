@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <assert.h>
-#include "core.h"
 
 #include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_session_uuid_struct.h"

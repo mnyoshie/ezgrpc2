@@ -2,70 +2,69 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <stddef.h>
 #include "core.h"
-#include "ezgrpc2_ring.h"
+#include "ezgrpc2_arena.h"
 
-struct ezgrpc2_ring {
+struct ezgrpc2_arena {
   /* indexes */
   size_t write;
   size_t read;
-  /* number of elements written */
+  /* number of bytes written */
   size_t count;
-  /* number of elements that can be written */
-  size_t depth;
-  /* size of each element */
+  /* size of buf */
   size_t size;
   uint8_t buf[];
 };
 
-EZGRPC2_API ezgrpc2_ring *ezgrpc2_ring_new(size_t depth, size_t size) {
-  ezgrpc2_ring *ring = malloc(sizeof(*ring) + sizeof(uint8_t)*depth*size);
-  if (ring == NULL)
+EZGRPC2_API ezgrpc2_arena *ezgrpc2_arena_new(size_t size) {
+  ezgrpc2_arena *arena = malloc(sizeof(*arena) + size);
+  if (arena == NULL)
     return NULL;
-  ring->read = 0;
-  ring->write = 0;
-  ring->count = 0;
-  /* number of elements */
-  ring->depth = depth;
+  arena->read = 0;
+  arena->write = 0;
   /* size of each elements */
-  ring->size = size;
-  return ring;
+  arena->size = size;
+  return arena;
 }
 
-EZGRPC2_API void ezgrpc2_ring_free(ezgrpc2_ring *ezring) {
-  free(ezring);
+EZGRPC2_API void ezgrpc2_arena_free(ezgrpc2_arena *ezarena) {
+  free(ezarena);
 }
 
 /* appends to the last element */
-EZGRPC2_API int ezgrpc2_ring_write(ezgrpc2_ring *ring, void *data) {
-  assert(ring != NULL);
-  if (ring->count + 1 > ring->depth)
-    return 1;
-  memcpy(&ring->buf[ring->write*ring->size], data, ring->size);;
-  ring->write = (ring->write + 1)%ring->depth;
+EZGRPC2_API void *ezgrpc2_arena_malloc(ezgrpc2_arena *arena, size_t size) {
+  assert(arena != NULL);
 
-  ring->count++;
-
-  return 0; 
-}
-/* appends to the last element */
-EZGRPC2_API void *ezgrpc2_ring_read(ezgrpc2_ring *ring, void *data) {
-  assert(ring != NULL);
-  if (ring->count == 0)
+  size_t alignment = (uintptr_t)(const void *)&arena->buf[arena->write] % alignof(max_align_t); 
+  if (arena->write + size + alignment > arena->size)
     return NULL;
-  void *ret = &ring->buf[ring->read*ring->size];
-  ring->read = (ring->read + 1)%ring->depth;
+  
+  arena->write = (arena->write + size + alignment);
 
-  ring->count--;
+
+  return &arena->buf[arena->write + alignment]; 
+}
+
+
+/* appends to the last element */
+EZGRPC2_API void *ezgrpc2_arena_read(ezgrpc2_arena *arena, size_t size) {
+  assert(arena != NULL);
+  if (arena->count == 0)
+    return NULL;
+  void *ret = &arena->buf[arena->read*arena->size];
+  arena->read = (arena->read + 1)%arena->depth;
+
+  arena->count--;
 
   return ret; 
 }
 
-EZGRPC2_API int ezgrpc2_ring_is_empty(ezgrpc2_ring *ring) {
-  return !ring->count;
+EZGRPC2_API int ezgrpc2_arena_is_empty(ezgrpc2_arena *arena) {
+  return !arena->count;
 }
 
-EZGRPC2_API int ezgrpc2_ring_count(ezgrpc2_ring *ring) {
-  return ring->count;
+EZGRPC2_API int ezgrpc2_arena_count(ezgrpc2_arena *arena) {
+  return arena->count;
 }
 

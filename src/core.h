@@ -59,17 +59,11 @@ static char *strndup(char *c, size_t n) {
 
 #include "ansicolors.h"
 #include "common.h"
-#include "ezgrpc2_session.h"
-#include "ezgrpc2_path.h"
-#include "ezgrpc2_server_settings.h"
-#include "ezgrpc2_server_settings_struct.h"
-#include "ezgrpc2_session_info.h"
-#include "ezgrpc2_session_uuid.h"
-#include "ezgrpc2_session_uuid_struct.h"
-#include "ezgrpc2_http2_settings.h"
+#include "ezgrpc2.h"
 #include "ezgrpc2_http2_settings_struct.h"
+#include "ezgrpc2_server_settings_struct.h"
+#include "ezgrpc2_session_uuid_struct.h"
 
-#define EZGRPC2_API __attribute__((visibility("default")))
 
 
 /* stores the values of a SETTINGS frame */
@@ -84,9 +78,6 @@ static char *strndup(char *c, size_t n) {
 //
 
 
-#ifndef EZGRPC2_STREAM_MAX_HEADERS
-#define EZGRPC2_STREAM_MAX_HEADERS 32
-#endif
 typedef struct ezgrpc2_stream ezgrpc2_stream;
 struct ezgrpc2_stream {
   i32 stream_id;
@@ -95,7 +86,7 @@ struct ezgrpc2_stream {
    * unix epoch */
   u64 time;
   size_t nb_headers;
-  ezgrpc2_header headers[EZGRPC2_STREAM_MAX_HEADERS];
+  ezgrpc2_header headers[CONFIG_STREAM_MAX_HEADERS];
   //ezgrpc2_list *lheaders;
 
   bool is_method_post : 1;
@@ -113,7 +104,6 @@ struct ezgrpc2_stream {
 
   /* stores `:path` */
   ezgrpc2_path *path;
-  size_t path_index;
 
   /* recv_data */
   size_t recv_len;
@@ -148,8 +138,8 @@ struct ezgrpc2_session {
   char *server_addr;
   u16 *server_port;
 
-  size_t nb_paths;
-  ezgrpc2_path *paths;
+//  size_t nb_paths;
+//  ezgrpc2_path *paths;
 
 
   /* settings requested by the client. to be set when a SETTINGS
@@ -169,7 +159,15 @@ struct ezgrpc2_server {
   ezgrpc2_server_settings server_settings;
   ezgrpc2_http2_settings http2_settings;
   thpool logger_thread;
+  size_t nb_paths;
+  ezgrpc2_path *paths;
+
+
+
   ezgrpc2_list *levents;
+  ezgrpc2_list *lmessages;
+  ezgrpc2_arena_event *arena_events;
+  ezgrpc2_arena_message *arena_messages;
 
   u16 ipv4_port;
   u16 ipv6_port;

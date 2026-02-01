@@ -10,6 +10,12 @@
 #include <stdint.h>
 #include "common.h"
 
+#ifndef EZGRPC2_API
+#define EZGRPC2_API __attribute__((visibility("default")))
+#endif
+
+#include "ezgrpc2_arena_event.h"
+#include "ezgrpc2_arena_message.h"
 #include "ezgrpc2_event.h"
 #include "ezgrpc2_global.h"
 #include "ezgrpc2_http2_settings.h"

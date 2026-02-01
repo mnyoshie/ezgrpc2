@@ -1,7 +1,8 @@
 #ifndef EZGRPC2_EVENT_H
 #define EZGRPC2_EVENT_H
 
-#include "common.h"
+#include <stdint.h>
+#include "defs.h"
 #include "ezgrpc2_list.h"
 #include "ezgrpc2_session_uuid.h"
 
@@ -26,16 +27,14 @@ typedef enum ezgrpc2_event_type ezgrpc2_event_type;
  *
  */
 struct ezgrpc2_event_cancel {
-  size_t path_index;
-  i32 stream_id;
+  int32_t stream_id;
 };
 
 /**
  *
  */
 struct ezgrpc2_event_message {
-  size_t path_index;
-  i32 stream_id;
+  int32_t stream_id;
   char end_stream;
   /* Cast the return of :c:func:`ezgrpc2_list_popb` to a pointer to
    * :c:struct:`ezgrpc2_message`
@@ -47,9 +46,8 @@ struct ezgrpc2_event_message {
  *
  */
 struct ezgrpc2_event_dataloss {
-  size_t path_index;
   /* cast ezgrpc2_list_popb to ``ezgrpc2_message *`` */
-  i32 stream_id;
+  int32_t stream_id;
 };
 
 /**
@@ -60,6 +58,7 @@ struct ezgrpc2_event {
   ezgrpc2_session_uuid *session_uuid;
 
   ezgrpc2_event_type type;
+  void *userdata;
 
   /**
    * Anonymous union

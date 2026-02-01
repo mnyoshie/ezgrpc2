@@ -1,5 +1,5 @@
 #include <stdarg.h>
-#include "core.h"
+#include "defs.h"
 #include "ezgrpc2_session.h"
 
 ezgrpc2_event *event_new(ezgrpc2_event_type type, ezgrpc2_session_uuid *session_uuid, ...) {
