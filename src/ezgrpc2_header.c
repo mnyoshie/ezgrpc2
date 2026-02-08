@@ -1,0 +1,25 @@
+#include <stdlib.h>
+#include <string.h>
+#include "common.h"
+#include "ezgrpc2_header.h"
+
+ezgrpc2_header *ezgrpc2_header_new(const u8 *name, size_t nlen, const u8 *value, size_t vlen) {
+  ezgrpc2_header *ezheader = malloc(sizeof(*ezheader));
+  if (ezheader == NULL)
+    return NULL;
+
+  ezheader->name = malloc(nlen);
+  ezheader->value = malloc(vlen);
+
+  memcpy(ezheader->name, name, nlen);
+  memcpy(ezheader->value, value, vlen);
+  ezheader->namelen = nlen;
+  ezheader->valuelen = vlen;
+
+  return ezheader;
+}
+
+void ezgrpc2_header_free(ezgrpc2_header *ezheader) {
+  free(ezheader->name);
+  free(ezheader->value);
+}

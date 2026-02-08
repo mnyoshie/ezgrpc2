@@ -1,0 +1,4 @@
+- [ ] Add `ezgrpc2_list_message_t` for easier type checking.
+- [ ] Add `ezgrpc2_list_event_t` for easier type checking.
+- [ ] Add `ezgrpc2_http2_settings*`
+- [ ] Add `ezgrpc2_server_settings*`
