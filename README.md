@@ -168,8 +168,7 @@ and get immediately closed with `EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT`.
 ezgrpc2 - A grpc server without the extra fancy features.
 https://github.com/mnyoshie/ezgrpc2
 
-Copyright (c) 2023-2025 M. N. Yoshie
-Copyright (c) 2023-2025 Al-buharie Amjari
+Copyright (c) 2023-2025 The EZgRPC2 Authors
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
